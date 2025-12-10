@@ -88,16 +88,16 @@ class MultiSourcesProcessor:
         self._alti_processor.process(resume=resume[0])
 
         # Merge width sources
+        width_config = self.config["width-config"]
         if width_config is not None:
             self._logger.info("Load width data")
-            width_config = self.config["width-config"]
             width_config["destination"] = alti_config["destination"]
             self._width_processor = WidthMergeProcessor(width_config)
             self._width_processor.process(resume=resume[1])
         else:
             self._width_processor = None
 
-        self._merge_and_summarize_(self, min_obs_count)
+        self._merge_and_summarize_(min_obs_count)
 
         self._logger.info("[END] MultiSourcesProcessor::process") 
 
@@ -231,12 +231,16 @@ class MultiSourcesProcessor:
                     wse2 = np.interp(dt_width, dt_wse, wse)
                     wse_reg = wse2[np.argsort(wse2)]
                     width_reg = width[np.argsort(wse2)]
-                    if self.config["section-method"] == "percentiles":
+                    if "section-method" in self.config:
+                        section_method = self.config["section-method"]
+                    else:
+                        section_method = "percentiles"
+                    if section_method == "percentiles":
                         wse_percentiles = np.array([np.percentile(wse_reg, pct) for pct in range(10, 100, 10)])
                         width_percentiles = np.array([np.percentile(width_reg, pct) for pct in range(10, 100, 10)])
                         wse_reg = wse_percentiles
                         width_reg = width_percentiles
-                    elif self.config["section-method"] == "powerlaw":
+                    elif section_method == "powerlaw":
                         width_reg = powerlaw_fit(wse_reg, width_reg)
                     else:
                         raise ValueError("Wrong section method: %s" % self.config["section-method"])
@@ -295,11 +299,11 @@ class MultiSourcesProcessor:
             self._final_summary["width_obs"].append(width_count)
 
         # Create summary GeoDataFrame and save to shapefile
-        final_summary_gdf = gpd.GeoDataFrame(data=final_summary, 
-                                             geometry=gpd.points_from_xy(final_summary["x"], final_summary["y"]),
+        final_summary_gdf = gpd.GeoDataFrame(data=self._final_summary, 
+                                             geometry=gpd.points_from_xy(self._final_summary["x"], self._final_summary["y"]),
                                              crs=self._alti_processor.crs)
         final_summary_gdf.to_file(self.config["summary-shapefile"])
 
         self._logger.info("[ END ] MultiSourcesProcessor::process") 
 
-        return final_summary
+        return self._final_summary
