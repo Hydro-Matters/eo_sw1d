@@ -1,0 +1,55 @@
+[project]
+name = "eo_sw1d"
+version = "0.1.0"
+authors = [
+    { name="Kevin Larnier", email="kevin.larnier@hydro-matters.fr" },
+]
+description = "A package for easy setup of models from EO data"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "geopy>=2.2",
+    "matplotlib>=3.9",
+    "netCDF4>=1.6",
+    "rasterio>1.2",
+    "requests>=2.20",
+    "scipy>=1.14.5",
+    "tqdm>=4.5",
+    "geopandas>=0.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/Hydro-Matters/eo_sw1d#"
+
+[build-system]
+requires = [
+    "setuptools>=42",
+    "rasterio>=1.2",
+    "geopandas>=0.12",
+    "pybind11>=2.10.0",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["eo_sw1d"]
+
+[tool.cibuildwheel]
+test-command = "python {project}/tests/test.py"
+test-skip = "*universal2:arm64"
+
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.ruff.lint]
+extend-select = [
+  "B",   # flake8-bugbear
+  "I",   # isort
+  "PGH", # pygrep-hooks
+  "RUF", # Ruff-specific
+  "UP",  # pyupgrade
+]
