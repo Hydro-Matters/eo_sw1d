@@ -150,7 +150,7 @@ class NetworkProcessor:
         self._logger.info("- Number of segments: %i" % segment_index)
 
         # TO COMMENT ?
-        merged_gdf["seg_idx"] = segment_index - merged_gdf["seg_idx"]
+        #merged_gdf["seg_idx"] = segment_index - merged_gdf["seg_idx"]
 
         # Apply user mapping
         if segments_mapping is not None:
@@ -160,13 +160,12 @@ class NetworkProcessor:
                     merged_gdf.loc[index, "seg_idx"] = segments_mapping[seg_idx]
 
         # Save to shapefile
+        merged_gdf = merged_gdf[merged_gdf["seg_idx"] != -9]
         merged_gdf.to_file(self.config["output"]["shapefile"])
         self._merged_gdf = merged_gdf
 
         # Save segments to shapefile
         if "segments-shapefile" in self.config["output"]:
-
-            # TODO debug !
 
             # Compute aggregated segments
             segments_indices = merged_gdf["seg_idx"].unique()
@@ -175,9 +174,6 @@ class NetworkProcessor:
                              "geometry": []}
 
             for seg_idx in segments_indices:
-
-                print("seg: %i" % seg_idx)
-
 
                 segment_gdf = merged_gdf[merged_gdf["seg_idx"] == seg_idx]
                 segment_gdf_sorted = segment_gdf.sort_values(by="dist_out", ascending=False)
@@ -190,29 +186,29 @@ class NetworkProcessor:
                         reach_nodes_gdf = reach_nodes_gdf.sort_values(by="dist_out")
                         n0 = reach_nodes_gdf["geometry"].values[0]
                         nE = reach_nodes_gdf["geometry"].values[-1]
-                        x0 = reach_coords[0][0]
-                        y0 = reach_coords[0][1]
-                        xE = reach_coords[-1][0]
-                        yE = reach_coords[-1][1]
+                        # x0 = reach_coords[0][0]
+                        # y0 = reach_coords[0][1]
+                        # xE = reach_coords[-1][0]
+                        # yE = reach_coords[-1][1]
                         d1 = segment_gdf_sorted.loc[index, "geometry"].project(n0)
                         d2 = segment_gdf_sorted.loc[index, "geometry"].project(nE)
                         # l = ax0.plot([c[0] for c in reach_coords[::-1]], [c[1] for c in reach_coords[::-1]], "-", lw=4, label="%i" % reach_id)
                         if d1 < d2:
-                            print("%i: std" % reach_id)
-                            print("Upstream: (%f, %f)" % (reach_coords[-1][0], reach_coords[-1][1]))
-                            print("Dowstream: (%f, %f)" % (reach_coords[1][0], reach_coords[1][1]))
-                            print("Dowstream++: (%f, %f)" % (reach_coords[0][0], reach_coords[0][1]))
+                            # print("%i: std" % reach_id)
+                            # print("Upstream: (%f, %f)" % (reach_coords[-1][0], reach_coords[-1][1]))
+                            # print("Dowstream: (%f, %f)" % (reach_coords[1][0], reach_coords[1][1]))
+                            # print("Dowstream++: (%f, %f)" % (reach_coords[0][0], reach_coords[0][1]))
                             coords += reach_coords[::-1][1:]
                             # ax0.plot(reach_coords[-1][0], reach_coords[-1][1], "o", color=l[0].get_color())
                             # ax0.plot(reach_coords[0][0], reach_coords[0][1], "+", color=l[0].get_color())
                         else:
-                            print("%i: reverse" % reach_id)
-                            print("Upstream+: (%f, %f)" % (reach_coords[0][0], reach_coords[0][1]))
-                            print("Upstream: (%f, %f)" % (reach_coords[1][0], reach_coords[1][1]))
-                            print("Dowstream: (%f, %f)" % (reach_coords[-1][0], reach_coords[-1][1]))
-                            print("coords[0]:", coords[-2:])
+                            # print("%i: reverse" % reach_id)
+                            # print("Upstream+: (%f, %f)" % (reach_coords[0][0], reach_coords[0][1]))
+                            # print("Upstream: (%f, %f)" % (reach_coords[1][0], reach_coords[1][1]))
+                            # print("Dowstream: (%f, %f)" % (reach_coords[-1][0], reach_coords[-1][1]))
+                            # print("coords[0]:", coords[-2:])
                             coords += reach_coords[1:]
-                            print("coords[1]:", coords[-2:])
+                            # print("coords[1]:", coords[-2:])
                             # ax0.plot(reach_coords[0][0], reach_coords[0][1], "o", color=l[0].get_color())
                             # ax0.plot(reach_coords[-1][0], reach_coords[-1][1], "+", color=l[0].get_color())
 

@@ -93,7 +93,8 @@ config = {
             ]
         },
         "output": {
-            "shapefile": "output/garonne1_alti/network_v17b.shp"
+            "shapefile": "output/garonne1_alti/network_v17b.shp",
+            "segments-shapefile": "output/garonne1_alti/segments_v17b.shp"
         }
 
     }
