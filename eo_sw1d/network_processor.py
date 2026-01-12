@@ -149,8 +149,11 @@ class NetworkProcessor:
 
         self._logger.info("- Number of segments: %i" % segment_index)
 
-        # TO COMMENT ?
-        #merged_gdf["seg_idx"] = segment_index - merged_gdf["seg_idx"]
+        # Remove not assigned reach
+        merged_gdf = merged_gdf[merged_gdf["seg_idx"] != -9]
+
+        # Reverse order to get segments in upstream to downstream order
+        merged_gdf["seg_idx"] = segment_index - merged_gdf["seg_idx"]
 
         # Apply user mapping
         if segments_mapping is not None:
@@ -160,7 +163,6 @@ class NetworkProcessor:
                     merged_gdf.loc[index, "seg_idx"] = segments_mapping[seg_idx]
 
         # Save to shapefile
-        merged_gdf = merged_gdf[merged_gdf["seg_idx"] != -9]
         merged_gdf.to_file(self.config["output"]["shapefile"])
         self._merged_gdf = merged_gdf
 
@@ -222,3 +224,6 @@ class NetworkProcessor:
 
             segments_gdf = gpd.GeoDataFrame(data={"seg_idx": segments_data["seg_idx"]}, geometry=segments_data["geometry"], crs=4326)
             segments_gdf.to_file(self.config["output"]["segments-shapefile"])
+
+        self._logger.info("[ END ] NetworkProcessor::process") 
+

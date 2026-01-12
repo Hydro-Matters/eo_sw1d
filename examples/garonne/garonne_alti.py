@@ -7,10 +7,13 @@ import pandas as pd
 
 from eo_sw1d.multisources_processor import MultiSourcesProcessor
 from eo_sw1d.network_processor import NetworkProcessor
-# from eo_sw1d.dassflow1d_mesh_builder import Dassflow1DMeshBuilder
+from eo_sw1d.mesh_processor import MeshProcessor
 # from eo_sw1d.observations_processor import ObservationsProcessor
 # from eo_sw1d.hubeau_processor import HubEauProcessor
 # from eo_sw1d.utils import HubEauProcessor
+
+import warnings
+warnings.filterwarnings(action="error")
 
 logger = logging.getLogger("eo-sw1d")
 logger.setLevel(logging.INFO)
@@ -94,9 +97,60 @@ config = {
         },
         "output": {
             "shapefile": "output/garonne1_alti/network_v17b.shp",
-            "segments-shapefile": "output/garonne1_alti/segments_v17b.shp"
+            # "segments-shapefile": "output/garonne1_alti/segments_v17b.shp"
         }
 
+    },
+
+    # MESH PROCESSOR
+    "mesh-processor": {
+
+        "sources": {
+            "network-file": "output/garonne1_alti/network_v17b.shp",
+            "nodes-file": "data/sword/nodes_subset_v17b.shp",
+            "recompute-nodes-distances": True,
+            "profiles-file": "output/garonne1_alti/summary_alti_width_merged.shp"
+        },
+        "inflow": [
+            {
+                "segment-index": 0,
+                "hydro3-file": "/mnt/c/WORK/PROJETS/HYDRAVATAR/Garonne/Modeles/data/gauges/SCHAPI/O4001010_Qln(n=15_non-glissant).csv"
+            },
+            {
+                "segment-index": 1,
+                "hydro3-file": "/mnt/c/WORK/PROJETS/HYDRAVATAR/Garonne/Modeles/data/gauges/SCHAPI/O4802520_Qln(n=15_non-glissant).csv"
+            },
+            {
+                "segment-index": 2,
+                "hydro3-file": "/mnt/c/WORK/PROJETS/HYDRAVATAR/Garonne/Modeles/data/gauges/SCHAPI/O1652930_Qln(n=15_non-glissant).csv"
+            },
+            {
+                "segment-index": 3,
+                "hydro3-file": "/mnt/c/WORK/PROJETS/HYDRAVATAR/Garonne/Modeles/data/gauges/SCHAPI/O1252510_Qln(n=15_non-glissant).csv"
+            },
+            {
+                "segment-index": 4,
+                "hydro3-file": "/mnt/c/WORK/PROJETS/HYDRAVATAR/Garonne/Modeles/data/gauges/SCHAPI/O0200020_Qln(n=15_non-glissant).csv"
+            },
+            {
+                "segment-index": 5,
+                "hydro3-file": "/mnt/c/WORK/PROJETS/HYDRAVATAR/Garonne/Modeles/data/gauges/SCHAPI/O0502520_Qln(n=15_non-glissant).csv"
+            },
+            {
+                "segment-index": 7,
+                "hydro3-file": "/mnt/c/WORK/PROJETS/HYDRAVATAR/Garonne/Modeles/data/gauges/SCHAPI/O5602520_Qln(n=15_non-glissant).csv"
+            },
+            {
+                "segment-index": 16,
+                "hydro3-file": "/mnt/c/WORK/PROJETS/HYDRAVATAR/Garonne/Modeles/data/gauges/SCHAPI/O7701540_Qln(n=15_non-glissant).csv"
+            },
+        ],
+        "output": {
+            "mesh-file-prefix": "output/garonne1_alti/mesh_v17b01",
+            "mesh-shapefile": "output/garonne1_alti/mesh_v17b01.shp",
+            "plot-dir": "output/garonne1_alti/plot",
+            "tmp-dir": "output/garonne1_alti/tmp",
+        }
     }
 }
 
@@ -110,3 +164,8 @@ do_process = True
 if do_process is True:
     network_processor = NetworkProcessor(config["network-processor"])
     network_processor.process(resume=False)
+
+do_process = True
+if do_process is True:
+    mesh_processor = MeshProcessor(config["mesh-processor"])
+    mesh_processor.process(resume=False)
