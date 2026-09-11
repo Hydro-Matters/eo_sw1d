@@ -1,14 +1,10 @@
 import geopandas as gpd
-import glob
 import logging
 import netCDF4 as nc
 import numpy as np
-import os
 import pandas as pd
 from shapely.geometry import LineString
-from tqdm.autonotebook import tqdm
 
-import matplotlib.pyplot as plt
 
 class NetworkProcessor:
     """ A class for computing river network
@@ -188,36 +184,14 @@ class NetworkProcessor:
                         reach_nodes_gdf = reach_nodes_gdf.sort_values(by="dist_out")
                         n0 = reach_nodes_gdf["geometry"].values[0]
                         nE = reach_nodes_gdf["geometry"].values[-1]
-                        # x0 = reach_coords[0][0]
-                        # y0 = reach_coords[0][1]
-                        # xE = reach_coords[-1][0]
-                        # yE = reach_coords[-1][1]
                         d1 = segment_gdf_sorted.loc[index, "geometry"].project(n0)
                         d2 = segment_gdf_sorted.loc[index, "geometry"].project(nE)
-                        # l = ax0.plot([c[0] for c in reach_coords[::-1]], [c[1] for c in reach_coords[::-1]], "-", lw=4, label="%i" % reach_id)
                         if d1 < d2:
-                            # print("%i: std" % reach_id)
-                            # print("Upstream: (%f, %f)" % (reach_coords[-1][0], reach_coords[-1][1]))
-                            # print("Dowstream: (%f, %f)" % (reach_coords[1][0], reach_coords[1][1]))
-                            # print("Dowstream++: (%f, %f)" % (reach_coords[0][0], reach_coords[0][1]))
+                            # Reach points are in good order
                             coords += reach_coords[::-1][1:]
-                            # ax0.plot(reach_coords[-1][0], reach_coords[-1][1], "o", color=l[0].get_color())
-                            # ax0.plot(reach_coords[0][0], reach_coords[0][1], "+", color=l[0].get_color())
                         else:
-                            # print("%i: reverse" % reach_id)
-                            # print("Upstream+: (%f, %f)" % (reach_coords[0][0], reach_coords[0][1]))
-                            # print("Upstream: (%f, %f)" % (reach_coords[1][0], reach_coords[1][1]))
-                            # print("Dowstream: (%f, %f)" % (reach_coords[-1][0], reach_coords[-1][1]))
-                            # print("coords[0]:", coords[-2:])
+                            # Reach points are in reversed order
                             coords += reach_coords[1:]
-                            # print("coords[1]:", coords[-2:])
-                            # ax0.plot(reach_coords[0][0], reach_coords[0][1], "o", color=l[0].get_color())
-                            # ax0.plot(reach_coords[-1][0], reach_coords[-1][1], "+", color=l[0].get_color())
-
-                # ax0.set_title("Segment")
-                # ax0.plot([c[0] for c in coords], [c[1] for c in coords], "k--")
-                # ax0.legend()
-                # plt.show()
 
                 segments_data["seg_idx"].append(seg_idx)
                 segments_data["geometry"].append(LineString(coords))

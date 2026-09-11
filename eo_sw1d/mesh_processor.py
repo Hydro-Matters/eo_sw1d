@@ -65,9 +65,17 @@ def lowpass_filter(x, y, filtername="butter", dx=10, xflow=5):
 
 
 class MeshProcessor:
+    """ A class for computing generic mesh data (sections and segments)
+    """
 
     def __init__(self, config: dict):
+        """ Initialise an instance of MeshProcessor
 
+            Parameters
+                config: dict
+                    Configuration
+        """
+        
         self._logger = logging.getLogger("eo-sw1d")
         self.config = config
 
@@ -455,10 +463,13 @@ class MeshProcessor:
         self._cs_df = pd.DataFrame(data=cs_df_data)
         self._cs_df.to_csv(cs_csv_file, index=False, sep=";")
 
-        seg_df_data = {"id": [], "us_segs": [], "ds_segs": []}
+        seg_df_data = {"id": [], "first_cs": [], "last_cs": [], "cs_count": [], "us_segs": [], "ds_segs": []}
         for iseg, seg_idx in enumerate(segs_idx):
             seg_dict = segs_dict[seg_idx]
             seg_df_data["id"].append(seg_idx)
+            seg_df_data["first_cs"].append(seg_dict["first_cs"])
+            seg_df_data["last_cs"].append(seg_dict["first_cs"] + seg_dict["ncs"] - 1)
+            seg_df_data["cs_count"].append(seg_dict["ncs"])
             if len(seg_dict["us_segs"]) == 0:
                 seg_df_data["us_segs"].append("-1")
             else:
