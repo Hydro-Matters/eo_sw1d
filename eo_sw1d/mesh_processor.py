@@ -103,11 +103,9 @@ class MeshProcessor:
         nodes_gdf = gpd.read_file(self.config["sources"]["nodes-file"])
         nodes_gdf = nodes_gdf.rename(columns={"wse": "p_wse", "width": "p_width"})
         nodes_gdf["wsefilt"] = np.ones(nodes_gdf.index.size) * -9999.0
-        nodes_gdf["wsefilt2"] = np.ones(nodes_gdf.index.size) * -9999.0
-        # nodes_gdf["wse_90"] = np.ones(nodes_gdf.index.size) * -9999.0
+        nodes_gdf["wse90filt"] = np.ones(nodes_gdf.index.size) * -9999.0
         nodes_gdf["widthfilt"] = np.ones(nodes_gdf.index.size) * -9999.0
-        nodes_gdf["widthfilt2"] = np.ones(nodes_gdf.index.size) * -9999.0
-        # nodes_gdf["width_90"] = np.ones(nodes_gdf.index.size) * -9999.0
+        nodes_gdf["width90filt"] = np.ones(nodes_gdf.index.size) * -9999.0
         nodes_gdf["bathy"] = np.ones(nodes_gdf.index.size) * -9999.0
         recompute_nodes_dist_out = False
         if "recompute-nodes-distances" in self.config["sources"]:
@@ -120,7 +118,7 @@ class MeshProcessor:
         self._logger.info("- file: %s" % self.config["sources"]["profiles-file"])
         profiles_gdf = gpd.read_file(self.config["sources"]["profiles-file"])
 
-        # Load inflow files
+        # Get inflow data
         inflow_Q10 = {}
         inflow_Q50 = {}
         for discharge_def in self.config["inflow"]:
@@ -135,17 +133,13 @@ class MeshProcessor:
                 inflow_Q10[discharge_def["segment-index"]] = Q10
                 inflow_Q50[discharge_def["segment-index"]] = Q50
             else:
-                inflow_Q10[discharge_def["segment-index"]] = discharge_def["qmean"]
-                inflow_Q50[discharge_def["segment-index"]] = discharge_def["qmean"]
+                inflow_Q10[discharge_def["segment-index"]] = np.nan
+                inflow_Q50[discharge_def["segment-index"]] = discharge_def["Q50"]
 
-        # Loop on segments
-        self._logger.info("Process segments")
+        # Initialize sections and segments parameters dict
         segs_idx = sorted(list(network_gdf["seg_idx"].unique()))
-        # print(segs_idx)
-
         cs_list = []
         segs_dict = {}
-
         for iseg, seg_idx in enumerate(segs_idx):
             segs_dict[seg_idx] = {
                 "index": iseg,
@@ -155,99 +149,76 @@ class MeshProcessor:
                 "ds_segs": []
             }
 
+        # Loop on segments
+        self._logger.info("Process segments")
         for iseg, seg_idx in enumerate(segs_idx):
             segs_dict[seg_idx]["first_cs"] = len(cs_list)
             reaches_selected = network_gdf[network_gdf["seg_idx"] == seg_idx]
             reaches_selected = reaches_selected.sort_values(by="dist_out")
             self._logger.info("- Process segment: %i [%i-%i]" % (seg_idx, reaches_selected["reach_id"].values[-1], reaches_selected["reach_id"].values[0]))
 
+            # Retrieve Q10 and Q50
             Q10 = inflow_Q10[seg_idx]
             Q50 = inflow_Q50[seg_idx]
-            self._logger.info("  - Q10: %.3f m3/s" % Q10)
+            if np.isfinite(Q10):
+                self._logger.info("  - Q10: %.3f m3/s" % Q10)
             self._logger.info("  - Q50: %.3f m3/s" % Q50)
-            # print("reaches_selected=")
-            # print(reaches_selected.loc[:, ["reach_id", "rch_id_dn", "dist_out"]])
-            # choice = input()
+
+            # Get list of reaches of current segment
             reaches_list = list(reaches_selected["reach_id"].values)
 
-            # Find upstream reaches
+            # Add one upstream reach in extended list
             reaches_list_extended = reaches_list.copy()
             if reaches_selected.loc[reaches_selected.index[0], "n_rch_dn"] > 0:
 
                 next_reach_id = int(reaches_selected.loc[reaches_selected.index[0], "rch_id_dn"].split(" ")[0])
                 reaches_list_extended.insert(0, next_reach_id)
 
+            # Add one downstream reach in extended list
             if reaches_selected.loc[reaches_selected.index[-1], "n_rch_up"] > 0:
 
                 prev_reach_id = int(reaches_selected.loc[reaches_selected.index[-1], "rch_id_up"].split(" ")[0])
                 reaches_list_extended.append(prev_reach_id)
 
-            # print(reaches_list)
-            # print(reaches_list_extended)
-
-
+            # Get all nodes in extended reaches list
             nodes_selected_filtering = nodes_gdf[nodes_gdf["reach_id"].isin(reaches_list_extended)]
             nodes_selected = nodes_gdf[nodes_gdf["reach_id"].isin(reaches_list)]
 
+            # Sort nodes by increasing dist_out (recompute dist_out if requested)
             if recompute_nodes_dist_out:
                 debug_recompute = False
-                # if seg_idx == 4:
-                #     debug_recompute = True
                 nodes_selected = self._recompute_nodes_dist_out_(nodes_selected, reaches_selected, debug=debug_recompute)
                 nodes_gdf.loc[nodes_selected.index, "dist_out"] = nodes_selected.loc[nodes_selected.index, "dist_out"]
             nodes_selected = nodes_selected.sort_values(by="dist_out", ascending=True)
-            # print("nodes_selected=", nodes_selected)
-            # choice = input()
 
+            # Merge nodes and profile data (from MultiSourceProcessor output)
             nodes_selected_merge = pd.merge(nodes_selected_filtering, profiles_gdf, how="left", left_on="node_id", right_on="key", suffixes=["_left", "_right"])
             nodes_selected_merge = nodes_selected_merge.sort_values(by="dist_out", ascending=True)
             nodes_selected_merge["left_index"] = nodes_selected_filtering.index
             nodes_selected_merge.set_index("left_index", inplace=True)
-            # print("nodes_selected_merge=")
-            # print(nodes_selected_merge)
-            # print(nodes_selected)
-            # print(nodes_selected_merge.columns)
-            # print(nodes_selected_merge.index)
-            # # print(nodes_selected_merge.loc[:, ["node_id", "p_wse", "wse_10", "wse_90", "p_width", "width_10", "width_90"]])
-            # # choice = input()
 
+            # Compute curvilinear abscissae for filtering
             xr_filt = nodes_selected_merge["dist_out"].values
             xr = nodes_selected["dist_out"].values
             dxi = 50.0
             N = int(np.floor((xr_filt[-1] - xr_filt[0]) / dxi))
-            # print("reaches_list=", reaches_list)
-            # print("N=", N)
-            # print(nodes_selected_merge.loc[:, ["node_id", "dist_out"]])
             xi = np.linspace(xr_filt[0], xr_filt[0]+N*dxi, N+1, endpoint=True)
 
 
+            # Retrieve quantiles of wse and width and prior values to replace missing values in profiles
             wse_10 = nodes_selected_merge["wse_10"].values
             wse_50 = nodes_selected_merge["wse_50"].values
-            wse_90 = nodes_selected_merge["wse_90"].values
-            # wsei = np.interp(xi, xr[np.isfinite(wse_10)], wse)
-            # wseifilt = hydraulic_filtering(xi, wsei, 3)
-            # wsefilt = np.interp(xr, xi, wseifilt)
-            
             p_wse = nodes_selected_merge["p_wse"].values
             width_10 = nodes_selected_merge["width_10"].values
             width_50 = nodes_selected_merge["width_50"].values
-            width_90 = nodes_selected_merge["width_90"].values
-            # width_90[width_90 < -999.0] = np.nan
             p_width = nodes_selected_merge["p_width"].values
-            # wse = wse_10.copy()
-            wse = wse_50
-            # wse[np.isnan(wse)] = p_wse[np.isnan(wse)]
-            width = width_50
-            width[np.isnan(width)] = p_width[np.isnan(width)]
-            width[width<-999] = p_width[width<-999]
 
+            # Filte WSE longitudinal profile
+            wse = wse_50
             if np.sum(np.isfinite(wse)) < 5:
                 wse = p_wse
-            # print("xi=", xi)
             wsei = np.interp(xi, xr_filt[np.isfinite(wse)], wse[np.isfinite(wse)])
             plot_steps = False
-            # if seg_idx == 7:
-            #     plot_steps = True
             if hydraulic_filtering is not None:
                 wseifilt = hydraulic_filtering(xi, wsei, 3, plot_steps=plot_steps)
             else:
@@ -255,10 +226,7 @@ class MeshProcessor:
             if "plot-dir" in self.config["output"]:
                 fig = plt.figure()
                 plt.plot(xi * 0.001, wsei)
-                # plt.plot(xr_filt * 0.001, wse_10, "g--")
                 plt.plot(xr_filt * 0.001, wse, "b.", label="source")
-                # plt.plot(xr_filt * 0.001, wse_90, "c--")
-                # plt.plot(xr_filt * 0.001, p_wse, "k--")
                 plt.axvline(xr[0] * 0.001, ls="--", color="k")
                 plt.axvline(xr[-1] * 0.001, ls="--", color="k")
                 plt.plot(xi * 0.001, wseifilt, "r--", label="filtered")
@@ -267,25 +235,19 @@ class MeshProcessor:
                 plt.ylabel("wse (m)")
                 plt.savefig(os.path.join(self.config["output"]["plot-dir"], "mesh_filt_seg%04i.png" % seg_idx))
                 plt.close(fig)
-
-            # xr = nodes_selected["dist_out"].values
-
             wsefilt = np.interp(xr, xi, wseifilt)
 
+            # Filter width longitudinal profile
+            width = width_50
+            width[np.isnan(width)] = p_width[np.isnan(width)]
+            width[width<-999] = p_width[width<-999]
             nfilt = int(250/dxi)
             if nfilt%2 == 0:
                 nfilt += 1
             widthi = np.interp(xi, xr_filt[np.isfinite(width)], width[np.isfinite(width)])
-            # widthi_filtered = np.convolve(widthi, np.ones(nfilt) * (1.0/nfilt), mode='same')
             widthi_filtered = lowpass_filter(xi, widthi, dx=dxi, xflow=200)
             width_filtered = np.interp(xr, xi, widthi_filtered)
             width_filtered[width_filtered < 10.0] = 10.0
-            # plt.plot(xr, width)
-            # plt.plot(xi, widthi_filtered)
-            # plt.show()
-
-
-            # print(wsefilt)
 
             # Invert Manning equation
             # Q = K * (w * (H-b))**5/3 * W**(-2/3) * S**0.5
@@ -294,75 +256,34 @@ class MeshProcessor:
             # => b = H - (Q/K * W**(2/3) / (S**0.5))**(3/5) / w
             reg = sps.linregress(xr, wsefilt)
             # h = (Q10 / 30.0 * width**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width
-            h = (Q10 / 30.0 * width_filtered**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width_filtered
+            h = (Q50 / 30.0 * width_filtered**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width_filtered
             bathy = wsefilt - h
             self._logger.info("  - h: [%.3f - %.3f] m" % (np.min(h), np.max(h)))
 
             bathyi = np.interp(xi, xr, bathy)
-            # widthi_filtered = np.convolve(widthi, np.ones(nfilt) * (1.0/nfilt), mode='same')
             bathyi_filtered = lowpass_filter(xi, bathyi, dx=dxi, xflow=100)
             bathy_filtered = np.interp(xr, xi, bathyi_filtered)
 
-
-            # nodes_selected = nodes_selected_base
+            # Add new nodes attributes
             nodes_selected = nodes_selected.sort_values(by="dist_out")
-
             nodes_gdf.loc[nodes_selected.index, "wsefilt"] = wsefilt
-            # nodes_gdf.loc[nodes_selected.index, "wsefilt2"] = wse_90
-            # nodes_gdf.loc[nodes_selected.index, "wse_90"] = wse_90
             nodes_gdf.loc[nodes_selected.index, "widthfilt"] = width_filtered
-            # nodes_gdf.loc[nodes_selected.index, "widthfilt2"] = width_90
-            # nodes_gdf.loc[nodes_selected.index, "width_90"] = width_90
             nodes_gdf.loc[nodes_selected.index, "bathy"] = bathy
             nodes_gdf.loc[nodes_selected.index, "bathy_filtered"] = bathy_filtered
 
-            # plt.plot(xr * 0.001, bathy, "k-", label="bathy")
-            # plt.plot(xr * 0.001, wse_10, "b-", label="wse_10")
-            # plt.plot(nodes_gdf.loc[nodes_selected.index, "dist_out"] * 0.001, nodes_gdf.loc[nodes_selected.index, "bathy"], "g--", label="bathy")
-            # plt.plot(nodes_gdf.loc[nodes_selected.index, "dist_out"] * 0.001, nodes_gdf.loc[nodes_selected.index, "wsefilt"], "r--", label="wse10")
-            # plt.show()
-
-
-            # print(nodes_gdf.loc[nodes_selected.index, ["dist_out", "bathy", "wsefilt", "widthfilt"]])
-            # choice = input()
-
-            # if seg_idx >= 9:
-
-            #     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12,9))
-            #     ax1.plot(xr[::-1], "k-")
-            #     ax1.plot(nodes_gdf.loc[nodes_selected.index[::-1], "dist_out"].values, "k+")
-            #     ax2.plot(bathy[::-1], "k-")
-            #     ax2.plot(nodes_gdf.loc[nodes_selected.index[::-1], "bathy"].values, "k+")
-            #     ax2.plot(wsefilt[::-1], "b-")
-            #     ax2.plot(nodes_gdf.loc[nodes_selected.index[::-1], "wsefilt"].values, "b+")
-            #     ax2.plot(nodes_gdf.loc[nodes_selected.index[::-1], "wsefilt2"].values, "g--")
-            #     # ax2.plot(nodes_selected_merge["wse_90"].values, "g--")
-            #     ax3.plot(width[::-1], "b-")
-            #     ax3.plot(nodes_gdf.loc[nodes_selected.index[::-1], "widthfilt"].values, "b+")
-            #     # width_90 = nodes_selected_merge.loc[nodes_selected.index[::-1], "width_90"].values
-            #     width_90 = nodes_gdf.loc[nodes_selected.index[::-1], "widthfilt2"].values
-            #     width_90[width_90 < -999.0] = np.nan
-            #     ax3.plot(width_90, "g--")
-            #     plt.show()
-
-
+            # Compute section vertical profile
             for index in nodes_selected.index[::-1]:
-                # wse_90_cs = nodes_selected_merge.loc[index, "wse_90"]
-                wse_90_cs = nodes_gdf.loc[index, "wsefilt2"]
+                wse_90_cs = nodes_gdf.loc[index, "wse_90"]
                 if wse_90_cs < nodes_gdf.loc[index, "wsefilt"]:
-                #     wse_90_cs = wse_90_cs + nodes_gdf.loc[index, "wsefilt"] - nodes_selected_merge.loc[index, "wse_10"]
                     wse_90_cs = np.nan
                 wse_90_cs = np.nan
-                # width_90_cs = nodes_selected_merge.loc[index, "width_90"]
-                width_90_cs = nodes_gdf.loc[index, "widthfilt2"]
+                width_90_cs = nodes_gdf.loc[index, "width_90"]
                 if np.isfinite(wse_90_cs) and np.isfinite(width_90_cs) and width_90_cs > -999.0 and width_90_cs > nodes_gdf.loc[index, "widthfilt"]:
                     cs_list.append({
                         "dist": nodes_gdf.loc[index, "dist_out"],
                         "x": nodes_gdf.loc[index, "geometry"].x,
                         "y": nodes_gdf.loc[index, "geometry"].y,
                         "bathy": nodes_gdf.loc[index, "bathy_filtered"],
-                        # "wse": [nodes_gdf.loc[index, "wsefilt"], wse_90_cs],
-                        # "width": [nodes_gdf.loc[index, "widthfilt"], width_90_cs]
                         "wse": [0.5 * (nodes_gdf.loc[index, "wsefilt"] + wse_90_cs)],
                         "width": [0.5 * (nodes_gdf.loc[index, "widthfilt"] + width_90_cs)],
                         "node_id": nodes_gdf.loc[index, "node_id"],
@@ -382,8 +303,10 @@ class MeshProcessor:
                         "seg_index": iseg
                     })
 
+            # Set number of sections in segment
             segs_dict[seg_idx]["ncs"] = len(cs_list) - segs_dict[seg_idx]["first_cs"]
 
+            # Make some plots
             if "plot-dir" in self.config["output"]:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
                 ax1.plot(xr_filt * 0.001, wse_10, "b-+", label="wse Q10 (raw)")
@@ -408,19 +331,15 @@ class MeshProcessor:
                 plt.savefig(os.path.join(self.config["output"]["plot-dir"], "mesh_profile_seg%04i.png" % seg_idx))
                 plt.close(fig)
 
-            # Update downstream segment Q10 and connectivities
-            # print(reaches_selected.loc[:, ["reach_id", "dist_out", "n_rch_dn"]])
-            # print("seg_idx=", seg_idx, "n_rch_dn=", reaches_selected.loc[reaches_selected.index[0], "n_rch_dn"])
+            # Update downstream segment Q10, Q50 and connectivities
             if reaches_selected.loc[reaches_selected.index[0], "n_rch_dn"] > 0:
 
                 next_reach_ids = map(int, reaches_selected.loc[reaches_selected.index[0], "rch_id_dn"].split(" "))
 
                 for next_reach_id in next_reach_ids:
 
-                    # next_reach_id = int(reaches_selected.loc[reaches_selected.index[0], "rch_id_dn"])
                     next_reach_row = network_gdf[network_gdf["reach_id"] == next_reach_id]
                     next_segment_index = next_reach_row.loc[next_reach_row.index[0], "seg_idx"]
-                    # print("seg_idx=", seg_idx, "next_reach_id=", next_reach_id, "segment_index=", next_segment_index)
                     if next_segment_index in inflow_Q10:
                         inflow_Q10[next_segment_index] += inflow_Q10[seg_idx]
                         inflow_Q50[next_segment_index] += inflow_Q50[seg_idx]
