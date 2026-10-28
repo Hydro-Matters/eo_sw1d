@@ -202,13 +202,14 @@ class MeshProcessor:
             N = int(np.floor((xr_filt[-1] - xr_filt[0]) / dxi))
             xi = np.linspace(xr_filt[0], xr_filt[0]+N*dxi, N+1, endpoint=True)
 
-
             # Retrieve quantiles of wse and width and prior values to replace missing values in profiles
             wse_10 = nodes_selected_merge["wse_10"].values
             wse_50 = nodes_selected_merge["wse_50"].values
+            wse_90 = nodes_selected_merge["wse_90"].values
             p_wse = nodes_selected_merge["p_wse"].values
             width_10 = nodes_selected_merge["width_10"].values
             width_50 = nodes_selected_merge["width_50"].values
+            width_90 = nodes_selected_merge["width_90"].values
             p_width = nodes_selected_merge["p_width"].values
 
             # Filte WSE longitudinal profile
@@ -271,11 +272,11 @@ class MeshProcessor:
 
             # Compute section vertical profile
             for index in nodes_selected.index[::-1]:
-                wse_90_cs = nodes_gdf.loc[index, "wse_90"]
+                wse_90_cs = nodes_gdf.loc[index, "wse90filt"]
                 if wse_90_cs < nodes_gdf.loc[index, "wsefilt"]:
                     wse_90_cs = np.nan
                 wse_90_cs = np.nan
-                width_90_cs = nodes_gdf.loc[index, "width_90"]
+                width_90_cs = nodes_gdf.loc[index, "width90filt"]
                 if np.isfinite(wse_90_cs) and np.isfinite(width_90_cs) and width_90_cs > -999.0 and width_90_cs > nodes_gdf.loc[index, "widthfilt"]:
                     cs_list.append({
                         "dist": nodes_gdf.loc[index, "dist_out"],

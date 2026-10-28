@@ -99,7 +99,10 @@ class NetworkProcessor:
                 if rch_id_dn is None:
                     merged_gdf.loc[cur_row_index, "c_dist_out"] = merged_gdf.loc[cur_row_index, "dist_out"]
                 else:
-                    rch_id_dn = list(map(int, rch_id_dn.split(" ")))
+                    if isinstance(rch_id_dn, str):
+                        rch_id_dn = list(map(int, rch_id_dn.split(" ")))
+                    else:
+                        rch_id_dn = [int(rch_id_dn)]
 
                     for i in range(0, len(rch_id_dn)):
                         reach_rows = merged_gdf[merged_gdf["reach_id"] == rch_id_dn[i]]
