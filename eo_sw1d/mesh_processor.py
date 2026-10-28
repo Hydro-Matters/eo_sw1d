@@ -124,7 +124,7 @@ class MeshProcessor:
         for discharge_def in self.config["inflow"]:
             if "hydro3-file" in discharge_def:
                 discharge_data = pd.read_csv(discharge_def["hydro3-file"], sep=",", parse_dates=["Date (TU)"])
-                t = discharge_data["Date (TU)"].values
+                t = discharge_data["Date (TU)"].dt.tz_convert(None).to_numpy()
                 q = discharge_data["Valeur (en m³/s)"].values
                 Q10 = np.percentile(q, 10)
                 Q50 = np.percentile(q, 50)
@@ -193,7 +193,9 @@ class MeshProcessor:
             nodes_selected_merge = pd.merge(nodes_selected_filtering, profiles_gdf, how="left", left_on="node_id", right_on="key", suffixes=["_left", "_right"])
             nodes_selected_merge = nodes_selected_merge.sort_values(by="dist_out", ascending=True)
             nodes_selected_merge["left_index"] = nodes_selected_filtering.index
-            nodes_selected_merge.set_index("left_index", inplace=True)
+            # nodes_selected_merge.set_index("left_index", inplace=True)
+            nodes_selected_merge = nodes_selected_merge.set_index("left_index")
+
 
             # Compute curvilinear abscissae for filtering
             xr_filt = nodes_selected_merge["dist_out"].values
@@ -237,7 +239,7 @@ class MeshProcessor:
             wsefilt = np.interp(xr, xi, wseifilt)
 
             # Filter width longitudinal profile
-            width = width_50
+            width = np.copy(width_50)
             width[np.isnan(width)] = p_width[np.isnan(width)]
             width[width<-999] = p_width[width<-999]
             nfilt = int(250/dxi)

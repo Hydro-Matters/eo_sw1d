@@ -101,6 +101,8 @@ class NetworkProcessor:
                 else:
                     if isinstance(rch_id_dn, str):
                         rch_id_dn = list(map(int, rch_id_dn.split(" ")))
+                    elif np.isnan(rch_id_dn):
+                        rch_id_dn = []
                     else:
                         rch_id_dn = [int(rch_id_dn)]
 
