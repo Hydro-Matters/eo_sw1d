@@ -71,8 +71,8 @@ config = {
                 }
             ],
             "output": {
-                "data-file": "output/garonne1_alti/test1_width_merged.shp",
-                "summary-shapefile" : "output/garonne1_alti/test1_summary_width_merged.shp"
+                "data-file": "output/garonne1_alti/width_merged.shp",
+                "summary-shapefile" : "output/garonne1_alti/summary_width_merged.shp"
             }
             
         },
