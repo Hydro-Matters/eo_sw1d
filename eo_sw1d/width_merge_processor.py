@@ -9,15 +9,32 @@ from tqdm.autonotebook import tqdm
 import zipfile
 
 class WidthMergeProcessor:
+    """ A class for merging multiple sources of width data
+    """
 
     def __init__(self, config):
+        """ Initialise an instance of WidthMergeProcessor
 
+            Parameters
+                config: dict
+                    Configuration
+        """
+        # Retrieve loggger
         self._logger = logging.getLogger("eo-sw1d")
 
+        # Store configuration
         self.config = config
 
 
-    def process(self, resume=False):
+    def process(self, resume: bool=False):
+        """Run the main process
+
+            Parameters
+                resume: bool
+                    True to resume from a previous run
+        """
+
+        self._logger.info("[START] WidthMergeProcessor::process") 
 
         # Load destination data
         if self.config["destination"]["source-type"] == "SWORD":
@@ -223,7 +240,16 @@ class WidthMergeProcessor:
         self.merged_data = merged_data
         self.merged_df = merged_df
 
+        self._logger.info("[ END ] WidthMergeProcessor::process") 
+
     def get_data(self, key=None):
+        """ Retrieve data for all sources or for a single source
+
+            Parameters
+            ----------
+                key: str
+                    Source identifier
+        """
 
         if key is None:
             return self.merged_df
@@ -231,6 +257,22 @@ class WidthMergeProcessor:
             return self.merged_df[self.merged_df["key"] == key]
 
     def __process_BAS_file__(self, src, dest_gdf, node_mapping=None):
+        """ Internal function that parse BAS product file
+
+            Parameters
+            ----------
+                src: str
+                    Path to the source (product) file
+                dest_gdf: geopandas.GeoDataFrame
+                    GeoDataFrame of the destination (objects where to extract data)
+                node_mapping: dict
+                    Node mapping (from different versions of SWORD for instance)
+
+            Return
+            ------
+                loaded_df: geopandas.GeoDataFrame
+                    DataFrame that contains all the loaded data
+        """
 
         dataset = pd.read_csv(src, sep=",", parse_dates=["datetime"])
         # dataset = dataset.rename(columns={"datetime": "t"})
@@ -248,9 +290,28 @@ class WidthMergeProcessor:
                 dataset.loc[index, "node_id"] = dst_node_id
             dataset = dataset[dataset["node_id"] > -9999]
 
-        return dataset.loc[:, ["node_id", "width", "datetime"]]
+        loaded_df = dataset.loc[:, ["node_id", "width", "datetime"]]
 
+        return loaded_df
+
+    # DEPRECATED
     def __process_BASold_file__(self, src, dest_gdf, node_mapping=None):
+        """ Internal function that parse BAS product file in old format
+
+            Parameters
+            ----------
+                src: str
+                    Path to the source (product) file
+                dest_gdf: geopandas.GeoDataFrame
+                    GeoDataFrame of the destination (objects where to extract data)
+                node_mapping: dict
+                    Node mapping (from different versions of SWORD for instance)
+
+            Return
+            ------
+                loaded_df: geopandas.GeoDataFrame
+                    DataFrame that contains all the loaded data
+        """
 
         dataset = pd.read_csv(src, sep=",")
         date_str = os.path.basename(src).split("_")[1]
@@ -271,61 +332,6 @@ class WidthMergeProcessor:
                 dataset.loc[index, "node_id"] = dst_node_id
             dataset = dataset[dataset["node_id"] > -9999]
 
-        return dataset.loc[:, ["node_id", "width", "datetime"]]
+        loaded_df = dataset.loc[:, ["node_id", "width", "datetime"]]
 
-        # if beams is None:
-        #     beams = ["1l", "1r", "2l", "2r", "3l", "3r"]
-
-        # if product == "ATL22":
-
-        #     data = {"date_UTC": [], "beam": [], "lon": [], "lat": [], "mean_hght": [], "mean_wse": []}
-        #     for beam in beams:
-        #         beam_group = dataset.groups["gt%s" % beam]
-        #         dates = list(beam_group.variables["transect_mean_time_utc"][:])
-        #         lon = beam_group.variables["transect_mean_lon"][:]
-        #         lat = beam_group.variables["transect_mean_lat"][:]
-        #         wse = beam_group.variables["transect_mean_ht_ortho"][:]
-        #         # data["beam"] += [beam] * len(lon)
-        #         # data["lon"] += list(lon)
-        #         # data["lat"] += list(lat)
-        #         # data["mean_hght"] += list(height)
-        #         # data["mean_wse"] += list(wse)
-        #         data_gdf = gpd.GeoDataFrame(data={"date": dates, "wse": wse}, geometry=gpd.points_from_xy(lon, lat), crs=4326)
-        #         joined_gdf = gpd.sjoin_nearest(dest_gdf.to_crs(3857), data_gdf.to_crs(3857), how="right", distance_col="dist", rsuffix="")
-        #         joined_gdf = joined_gdf[joined_gdf["dist"]< 100.0]
-        #         # if joined_gdf.index.size > 0:
-        #         #     print(joined_gdf.loc[:, ["node_id", "wse_right", "date"]])
-        #         #     joined_gdf.to_file("tmp.shp")
-        #         #     print(os.path.basename(src))
-        #         #     choice = input()
-        #         return joined_gdf.loc[:, ["node_id", "wse", "date"]]
-
-        # else:
-
-        #     raise NotImplementedError("Conversion for product %s is not implemented" % product)
-               
-
-    # def __process_SWOT_file__(self, src, dest_gdf, product="RiverSP-Node", beams=None):
-
-
-
-    #     if product == "RiverSP-Node":
-
-    #         riversp_gdf = gpd.read_file(src)
-    #         riversp_gdf["node_id"] = riversp_gdf["node_id"].astype(int)
-
-    #         merged_gdf = pd.merge(dest_gdf, riversp_gdf, how="left", on="node_id", suffixes=["_left", ""])
-    #         # print(merged_gdf)
-    #         # print(merged_gdf.columns)
-    #         merged_gdf = merged_gdf.loc[:, ["node_id", "wse", "time_str"]]
-    #         merged_gdf = merged_gdf[np.logical_and(merged_gdf["wse"] > -9999, merged_gdf["time_str"] != "no_data")]
-    #         merged_gdf["date"] = pd.to_datetime(merged_gdf["time_str"], format="%Y-%m-%dT%H:%M:%SZ")
-    #         merged_gdf = merged_gdf[merged_gdf["wse"] > -9999]
-    #         return merged_gdf.loc[:, ["node_id", "wse", "date"]]
-
-    #     else:
-
-    #         raise NotImplementedError("Conversion for product %s is not implemented" % product)
-
-    
-
+        return loaded_df

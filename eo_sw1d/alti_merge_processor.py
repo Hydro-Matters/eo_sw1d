@@ -288,7 +288,7 @@ class AltiMergeProcessor:
             self._logger.info("  - Number of data: %i" % data_count)
             self._logger.info("  - Priority range: [%i - %i]" % (priority_min, priority_max))
 
-                #    merged_alti
+        # Compute summary data
         summary_data = {"key": [], "x": [], "y": [], "wse_min": [], "wse_max": [], "obs_count": []}
         merged_data = {"key": [], "x": [], "y": [], "t": [], "source": [], "wse": [], "wse_u": [], "qual": [], "priority": []}
         for key in self.merged_alti.keys():
@@ -297,7 +297,6 @@ class AltiMergeProcessor:
             y = point_gdf.loc[point_gdf.index[0], "y"]
 
             # # Restrict using priority
-
             # priority_min_key = np.min(self.merged_alti[key]["priority"])
             # priority_values = np.array(self.merged_alti[key]["priority"])
             # priority_selection = priority_values[priority_values == priority_min_key]
@@ -340,13 +339,8 @@ class AltiMergeProcessor:
                 else:
                     summary_data["width_min"].append(np.min(self.merged_alti[key]["width"]))
                     summary_data["width_max"].append(np.max(self.merged_alti[key]["width"]))
-            # print("key=%i" % key)
-            # print("- count(summary_data['key']): %i" % len(summary_data["key"]))
-            # print("- width in self.merged_alti[key].keys():", "width" in self.merged_alti[key].keys())
-            # print("- count(summary_data['width_min']): %i" % len(summary_data["width_min"]))
+
         merged_csv_file = self.config["output"]["data-file"]
-        for key in merged_data:
-            print("merged_data[%s]: len=%i" % (key, len(merged_data[key])))
         if "data-shapefile" in self.config["output"]:
             merged_data_shp_file = self.config["output"]["data-shapefile"]
             merge_data_shp = merged_data.copy()
@@ -357,8 +351,6 @@ class AltiMergeProcessor:
         merged_df = pd.DataFrame(data=merged_data)
         merged_df.to_csv(merged_csv_file, sep=";", index=False)
         summy_shp_file = self.config["output"]["summary-shapefile"]
-        for key in summary_data.keys():
-            print("%s: %i" % (key, len(summary_data[key])))
         summary_gdf = gpd.GeoDataFrame(data=summary_data, geometry=gpd.points_from_xy(summary_data["x"], summary_data["y"]), crs=4326)
         summary_gdf.to_file(summy_shp_file)
 
@@ -366,7 +358,7 @@ class AltiMergeProcessor:
         self.merged_df = merged_df
 
     def get_data(self, key=None):
-        """ Retrieve data for a single source
+        """ Retrieve data for all sources or for a single source
 
             Parameters
             ----------

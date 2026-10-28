@@ -154,18 +154,11 @@ config = {
     }
 }
 
-do_process = False
-if do_process is True:
-    processor = MultiSourcesProcessor(config=config["multisources-processor"])
-    merged_summary = processor.process(resume=(True, False))
-    print("pause!");choice = input()
+processor = MultiSourcesProcessor(config=config["multisources-processor"])
+merged_summary = processor.process(resume=(True, True))
 
-do_process = True
-if do_process is True:
-    network_processor = NetworkProcessor(config["network-processor"])
-    network_processor.process(resume=False)
+network_processor = NetworkProcessor(config["network-processor"])
+network_processor.process(resume=False)
 
-do_process = True
-if do_process is True:
-    mesh_processor = MeshProcessor(config["mesh-processor"])
-    mesh_processor.process(resume=False)
+mesh_processor = MeshProcessor(config["mesh-processor"])
+mesh_processor.process(resume=False)

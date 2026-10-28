@@ -124,8 +124,6 @@ class MeshProcessor:
         for discharge_def in self.config["inflow"]:
             if "hydro3-file" in discharge_def:
                 discharge_data = pd.read_csv(discharge_def["hydro3-file"], sep=",", parse_dates=["Date (TU)"])
-                # print(discharge_data)
-                # choice = input()
                 t = discharge_data["Date (TU)"].values
                 q = discharge_data["Valeur (en m³/s)"].values
                 Q10 = np.percentile(q, 10)
