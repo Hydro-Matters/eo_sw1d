@@ -67,8 +67,12 @@ class NetworkProcessor:
         self._logger.info("Compute segments:")
 
         # Retrieve downstream reaches
-        downstream_rows = merged_gdf[merged_gdf["n_rch_dn"] == 0]
-        downstream_rows.sort_values(by="facc")
+        if "downtream-reaches" in self.config:
+            downtream_reaches = self.config["downtream-reaches"]
+            downstream_rows = merged_gdf[merged_gdf["reach_id"].isin(downtream_reaches)]
+        else:
+            downstream_rows = merged_gdf[merged_gdf["n_rch_dn"] == 0]
+            downstream_rows.sort_values(by="facc")
         merged_gdf.loc[downstream_rows.index, "c_dist_out"] = merged_gdf.loc[downstream_rows.index, "dist_out"]
         self._logger.info("- Downstream reaches: [%s]" % ",".join(["%i" % downstream_rows.loc[index, "reach_id"] for index in downstream_rows.index]))
 

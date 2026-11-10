@@ -37,19 +37,19 @@ class WidthMergeProcessor:
         self._logger.info("[START] WidthMergeProcessor::process") 
 
         # Load destination data
-        if self.config["destination"]["source-type"] == "SWORD":
+        if self.config["topology"]["source-type"] == "SWORD":
             dest_primaryKey = "node_id"
-        if "_GDF" not in self.config["destination"]:
-            if self.config["destination"]["source-type"] == "SWORD":
+        if "_GDF" not in self.config["topology"]:
+            if self.config["topology"]["source-type"] == "SWORD":
                 merged_gdf = None
-                for source_file in self.config["destination"]["source-files"]:
+                for source_file in self.config["topology"]["source-files"]:
                     file_gdf = gpd.read_file(source_file)
                     if merged_gdf is None:
                         merged_gdf = file_gdf
                     else:
                         merged_gdf = pd.concat((merged_gdf, file_gdf), ignore_index=True)
-            self.config["destination"]["_GDF"] = merged_gdf
-        destination_gdf = self.config["destination"]["_GDF"]
+            self.config["topology"]["_GDF"] = merged_gdf
+        destination_gdf = self.config["topology"]["_GDF"]
 
         if resume:
             merged_csv_file = self.config["output"]["data-file"]
@@ -134,8 +134,6 @@ class WidthMergeProcessor:
                                 print("[WARNING] No csv files in directory: %s" % datedir)
                             else:
                                 bas_csv_files.append(date_csv_files[0])
-
-                print("BAS CSV files: %i" % len(bas_csv_files))
 
                 for file_index in tqdm(range(0, len(bas_csv_files))):
                     bas_csv_file = bas_csv_files[file_index]

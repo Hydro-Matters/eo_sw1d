@@ -84,6 +84,7 @@ class MultiSourcesProcessor:
         # Merge altimetric (wse) sources
         self._logger.info("Load wse data")
         alti_config = self.config["alti-config"]
+        alti_config["topology"] = self.config["topology"]
         self._alti_processor = AltiMergeProcessor(alti_config)
         self._alti_processor.process(resume=resume[0])
 
@@ -91,7 +92,7 @@ class MultiSourcesProcessor:
         width_config = self.config["width-config"]
         if width_config is not None:
             self._logger.info("Load width data")
-            width_config["destination"] = alti_config["destination"]
+            width_config["topology"] = alti_config["topology"]
             self._width_processor = WidthMergeProcessor(width_config)
             self._width_processor.process(resume=resume[1])
         else:
@@ -111,6 +112,14 @@ class MultiSourcesProcessor:
         """
 
         self._logger.info("Merge wse and width data")
+
+        self._merged_data = {
+            "key": [],
+            "x": [],
+            "y": [],
+            "wse": [],
+            "width": []
+        }
 
         self._final_summary = {
             "key": [],
@@ -210,40 +219,41 @@ class MultiSourcesProcessor:
                 width_90 = np.percentile(width_values, 90)
             width_count = width_values.size
 
-            # Sections plots
-            if "section-plots-prefix" in self.config:
 
-                if wse_count > min_obs_count and width_count > min_obs_count:
+            if wse_count > min_obs_count and width_count > min_obs_count:
 
-                    # Sort wse in time
-                    isort = np.argsort(t_wse)
-                    t_wse = t_wse[isort]
-                    wse = wse_values[isort]
+                # Sort wse in time
+                isort = np.argsort(t_wse)
+                t_wse = t_wse[isort]
+                wse = wse_values[isort]
 
-                    # Sort width in time
-                    isort = np.argsort(t_width)
-                    t_width = t_width[isort]
-                    width = width_values[isort]
+                # Sort width in time
+                isort = np.argsort(t_width)
+                t_width = t_width[isort]
+                width = width_values[isort]
 
-                    # Interpolate width on wse times and vice-versa
-                    dt_wse = (t_wse - np.datetime64("1970-01-01")) / np.timedelta64(1, "s")
-                    dt_width = (t_width - np.datetime64("1970-01-01")) / np.timedelta64(1, "s")
-                    wse2 = np.interp(dt_width, dt_wse, wse)
-                    wse_reg = wse2[np.argsort(wse2)]
-                    width_reg = width[np.argsort(wse2)]
-                    if "section-method" in self.config:
-                        section_method = self.config["section-method"]
-                    else:
-                        section_method = "percentiles"
-                    if section_method == "percentiles":
-                        wse_percentiles = np.array([np.percentile(wse_reg, pct) for pct in range(10, 100, 10)])
-                        width_percentiles = np.array([np.percentile(width_reg, pct) for pct in range(10, 100, 10)])
-                        wse_reg = wse_percentiles
-                        width_reg = width_percentiles
-                    elif section_method == "powerlaw":
-                        width_reg = powerlaw_fit(wse_reg, width_reg)
-                    else:
-                        raise ValueError("Wrong section method: %s" % self.config["section-method"])
+                # Interpolate width on wse times and vice-versa
+                dt_wse = (t_wse - np.datetime64("1970-01-01")) / np.timedelta64(1, "s")
+                dt_width = (t_width - np.datetime64("1970-01-01")) / np.timedelta64(1, "s")
+                wse2 = np.interp(dt_width, dt_wse, wse)
+                wse_reg = wse2[np.argsort(wse2)]
+                width_reg = width[np.argsort(wse2)]
+                if "section-method" in self.config:
+                    section_method = self.config["section-method"]
+                else:
+                    section_method = "percentiles"
+                if section_method == "percentiles":
+                    wse_percentiles = np.array([np.percentile(wse_reg, pct) for pct in range(10, 100, 10)])
+                    width_percentiles = np.array([np.percentile(width_reg, pct) for pct in range(10, 100, 10)])
+                    wse_reg = wse_percentiles
+                    width_reg = width_percentiles
+                elif section_method == "powerlaw":
+                    width_reg = powerlaw_fit(wse_reg, width_reg)
+                else:
+                    raise ValueError("Wrong section method: %s" % self.config["section-method"])
+
+                # Sections plots
+                if "section-plots-prefix" in self.config["output"]:
 
                     # Make plot
                     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9,4))
@@ -267,8 +277,8 @@ class MultiSourcesProcessor:
                     wse_percentiles = np.array([np.percentile(wse, pct) for pct in range(10, 100, 10)])
                     wse2_percentiles = np.array([np.percentile(wse2, pct) for pct in range(10, 100, 10)])
                     width_percentiles = np.array([np.percentile(width, pct) for pct in range(10, 100, 10)])
-                    ax2.plot(-0.5 * width_percentiles, wse_percentiles, "b-")
-                    ax2.plot(0.5 * width_percentiles, wse_percentiles, "b-")
+                    # ax2.plot(-0.5 * width_percentiles, wse_percentiles, "b-")
+                    # ax2.plot(0.5 * width_percentiles, wse_percentiles, "b-")
                     ax2.plot(-0.5 * width_percentiles, wse2_percentiles, "g-")
                     ax2.plot(0.5 * width_percentiles, wse2_percentiles, "g-")
 
@@ -282,8 +292,26 @@ class MultiSourcesProcessor:
                     fig_title = "node_id: %i" % key
                     fig.suptitle(fig_title)
                     plt.tight_layout()
-                    fig.savefig("%s_%i.png" % (self.config["section-plots-prefix"], key))
-                    plt.close(fig)
+                    plot_file = "%s_%i.png" % (self.config["output"]["section-plots-prefix"], key)
+                    fig.savefig(plot_file)
+                    plt.close(fig)                
+
+                # Update profiles
+                for i in range(0, width_reg.size):
+                    self._merged_data["key"].append(key)
+                    self._merged_data["x"].append(x)
+                    self._merged_data["y"].append(y)
+                    self._merged_data["wse"].append(wse_reg[i])
+                    self._merged_data["width"].append(width_reg[i])
+
+            else:
+
+                wse_reg = None
+                self._merged_data["key"].append(key)
+                self._merged_data["x"].append(x)
+                self._merged_data["y"].append(y)
+                self._merged_data["wse"].append(np.nan)
+                self._merged_data["width"].append(np.nan)
 
             # Update summary lists
             self._final_summary["key"].append(key)
@@ -298,11 +326,19 @@ class MultiSourcesProcessor:
             self._final_summary["wse_obs"].append(wse_count)
             self._final_summary["width_obs"].append(width_count)
 
+        # Create profiles GeoDataFrame and save to csv
+        self._merged_gdf = pd.DataFrame(data=self._merged_data)
+        if "data-file" in self.config["output"]:
+            merged_csv_file = self.config["output"]["data-file"]
+            self._merged_gdf.to_csv(merged_csv_file, sep=";", index=False)
+
         # Create summary GeoDataFrame and save to shapefile
-        final_summary_gdf = gpd.GeoDataFrame(data=self._final_summary, 
-                                             geometry=gpd.points_from_xy(self._final_summary["x"], self._final_summary["y"]),
-                                             crs=self._alti_processor.crs)
-        final_summary_gdf.to_file(self.config["summary-shapefile"])
+        if "summary-shapefile" in self.config["output"]:
+            summary_csv_file = self.config["output"]["summary-shapefile"]
+            final_summary_gdf = gpd.GeoDataFrame(data=self._final_summary, 
+                                                geometry=gpd.points_from_xy(self._final_summary["x"], self._final_summary["y"]),
+                                                crs=self._alti_processor.crs)
+            final_summary_gdf.to_file(summary_csv_file)
 
         self._logger.info("[ END ] MultiSourcesProcessor::process") 
 

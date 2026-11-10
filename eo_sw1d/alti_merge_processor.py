@@ -39,20 +39,20 @@ class AltiMergeProcessor:
 
         self._logger.info("[START] AltiMergeProcessor::process") 
 
-        # Load destination data
-        if "_GDF" not in self.config["destination"]:
-            if self.config["destination"]["source-type"] == "SWORD":
+        # Load topology data
+        if "_GDF" not in self.config["topology"]:
+            if self.config["topology"]["source-type"] == "SWORD":
                 dest_primaryKey = "node_id"
                 merged_gdf = None
-                for source_file in self.config["destination"]["source-files"]:
+                for source_file in self.config["topology"]["source-files"]:
                     file_gdf = gpd.read_file(source_file)
                     if merged_gdf is None:
                         merged_gdf = file_gdf
                     else:
                         merged_gdf = pd.concat((merged_gdf, file_gdf), ignore_index=True)
                 merged_gdf = merged_gdf.rename(columns={"wse": "p_wse", "wse_var": "p_wse_u", "width": "p_width", "width_var": "p_width_u"})
-            self.config["destination"]["_GDF"] = merged_gdf
-        destination_gdf = self.config["destination"]["_GDF"]
+            self.config["topology"]["_GDF"] = merged_gdf
+        destination_gdf = self.config["topology"]["_GDF"]
         self.crs = destination_gdf.crs
 
         if resume:
@@ -211,6 +211,8 @@ class AltiMergeProcessor:
                     # Find all SWOT RiverSP-Node product files
                     riversp_files = []
                     candidate_dirs = glob.glob(os.path.join(source["source-dir"], "SWOT_L2_HR_RiverSP_Node*"))
+                    # self._logger.info("candidate_dirs=", str(candidate_dirs))
+
                     for candidate_dir in candidate_dirs:
                         if os.path.isdir(candidate_dir):
                             long_id = "_".join(os.path.basename(candidate_dir).split("_")[0:12])
@@ -226,8 +228,23 @@ class AltiMergeProcessor:
                             else:
                                 self._logger.warning("No data (shp or zip) found in candidate directory: %s" % candidate_dir)
                     if len(riversp_files) == 0:
+
                         # Fallback for all riversp files in a single directory
                         riversp_files = glob.glob(os.path.join(source["source-dir"], "SWOT_L2_HR_RiverSP_Node*.shp"))
+
+                        # Fallback for all riversp files in a single directory
+                        riversp_zipfiles = glob.glob(os.path.join(source["source-dir"], "SWOT_L2_HR_RiverSP_Node*.zip"))
+                        for riversp_zipfile in riversp_zipfiles:
+                            long_id = os.path.splitext(os.path.basename(riversp_zipfile))[0]
+                            if not os.path.isfile(os.path.join(source["source-dir"], "%s.shp" % long_id)):
+                                self._logger.info("- Extracting zip for %s" % long_id)
+                                with zipfile.ZipFile(riversp_zipfile, 'r') as zp:
+                                    zp.extractall(source["source-dir"])
+                                self._logger.info("DBG: %s" % riversp_zipfile)
+                                self._logger.info("     %s" % os.path.join(source["source-dir"], "%s.shp" % long_id))
+                                if not os.path.isfile(os.path.join(source["source-dir"], "%s.shp" % long_id)):
+                                    raise RuntimeError("shapefile not found after extracting the zip archive")
+                                riversp_files.append(os.path.join(source["source-dir"], "%s.shp" % long_id))
                     self._logger.info("  - Number of files: %i" % len(riversp_files))
 
                     # Process SWOT RiverSP-Node product files
@@ -244,10 +261,10 @@ class AltiMergeProcessor:
                             max_node_q = source["max-node_q"]
                         else:
                             max_node_q = 99999999
-                        if crid in source["mapping"]["crids"]:
-                            node_mapping=key_mapping
-                        else:
-                            node_mapping=None
+                        node_mapping=None
+                        if "mapping" in source:
+                            if crid in source["mapping"]["crids"]:
+                                node_mapping=key_mapping
                         var_ext = None
                         if "var-ext" in source:
                             var_ext = source["var-ext"]
@@ -542,7 +559,7 @@ class AltiMergeProcessor:
                 riversp_gdf = riversp_gdf.rename(columns=column_mapping)
                 print("(1) columns:", riversp_gdf.columns)
 
-            print("[0]: %i" % riversp_gdf.index.size)
+            # print("[0]: %i" % riversp_gdf.index.size)
             # profiler.step("read file")
             riversp_gdf["node_id"] = riversp_gdf["node_id"].astype(int)
             if node_mapping is not None:
@@ -557,7 +574,7 @@ class AltiMergeProcessor:
 
             # profiler.start()
             merged_gdf = pd.merge(dest_gdf, riversp_gdf, how="left", on="node_id", suffixes=["_left", ""])
-            print("[1]: %i" % merged_gdf.index.size)
+            # print("[1]: %i" % merged_gdf.index.size)
             # profiler.step("merge")
             # print(merged_gdf)
             # print(merged_gdf.columns)
@@ -568,7 +585,7 @@ class AltiMergeProcessor:
             merged_gdf["date"] = pd.to_datetime(merged_gdf["time_str"], format="%Y-%m-%dT%H:%M:%SZ")
             merged_gdf = merged_gdf[merged_gdf["wse"] > -9999]
             merged_gdf = merged_gdf[merged_gdf["node_q"] <= max_node_q]
-            print("[2]: %i" % merged_gdf.index.size)
+            # print("[2]: %i" % merged_gdf.index.size)
             # rows = merged_gdf[merged_gdf["node_id"] == 23214300030171]
             # print("[1]", rows)
             merged_gdf = merged_gdf.rename(columns={"node_q" : "qual"})

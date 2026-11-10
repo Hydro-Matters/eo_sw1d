@@ -92,10 +92,16 @@ class MeshProcessor:
             raise NotImplementedError("Resume previsously computed mesh file is not implemented")
             return
 
-        # Load network file
-        self._logger.info("Load network file")
-        self._logger.info("- file: %s" % self.config["sources"]["network-file"])
-        network_gdf = gpd.read_file(self.config["sources"]["network-file"])
+        # Load network
+        if "network-file" in self.config["sources"]:
+            self._logger.info("Load network file")
+            self._logger.info("- file: %s" % self.config["sources"]["network-file"])
+            network_gdf = gpd.read_file(self.config["sources"]["network-file"])
+        elif "network" in self.config["sources"]:
+            network_gdf = self.config["sources"]["network"]._merged_gdf
+            # network_gdf = network_gdf.dropna()
+        else:
+            raise ValueError("Either 'network' or 'network-file' must be set in sources")
 
         # Load nodes file
         self._logger.info("Load nodes file")
@@ -113,26 +119,46 @@ class MeshProcessor:
         # if recompute_nodes_dist_out:
         #     nodes_gdf = self._recompute_nodes_dist_out_(nodes_gdf, network_gdf)
 
-        # Load profiles file
-        self._logger.info("Load profiles file")
-        self._logger.info("- file: %s" % self.config["sources"]["profiles-file"])
-        profiles_gdf = gpd.read_file(self.config["sources"]["profiles-file"])
+        # Load profiles
+        if "profiles-file" in self.config["sources"]:
+            self._logger.info("Load profiles file")
+            self._logger.info("- file: %s" % self.config["sources"]["profiles-file"])
+            profiles_gdf = gpd.read_file(self.config["sources"]["profiles-file"])
+            profiles_gdf["key"] = profiles_gdf["key"].astype(np.int64)
+            print("TEST0:", profiles_gdf.key.dtype)
+        elif "profiles" in self.config["sources"]:
+            profiles_gdf = self.config["sources"]["profiles"]._merged_gdf
+            print("TEST:", profiles_gdf.key.dtype)
+            print("TEST:", nodes_gdf.node_id.dtype)
+        else:
+            raise ValueError("Either 'network' or 'network-file' must be set in sources")
+        
+        # Retrieve number of profiles
+        profiles_count = profiles_gdf[profiles_gdf["key"] == profiles_gdf["key"].values[0]]
 
-        # Get inflow data
-        inflow_Q10 = {}
-        inflow_Q50 = {}
-        for discharge_def in self.config["inflow"]:
-            if "hydro3-file" in discharge_def:
-                discharge_data = pd.read_csv(discharge_def["hydro3-file"], sep=",", parse_dates=["Date (TU)"])
-                t = discharge_data["Date (TU)"].dt.tz_convert(None).to_numpy()
-                q = discharge_data["Valeur (en m³/s)"].values
-                Q10 = np.percentile(q, 10)
-                Q50 = np.percentile(q, 50)
-                inflow_Q10[discharge_def["segment-index"]] = Q10
-                inflow_Q50[discharge_def["segment-index"]] = Q50
-            else:
-                inflow_Q10[discharge_def["segment-index"]] = np.nan
-                inflow_Q50[discharge_def["segment-index"]] = discharge_def["Q50"]
+        # Retrieve bathymetry estimation method:
+        bathy_estimation = self.config["bathy-estimation"]
+        bathy_method = bathy_estimation["method"]
+
+        if bathy_method == "constant-depth":
+            bathy_depth = bathy_estimation["constant-depth"]
+        elif bathy_method == "manning":
+            # Get inflow data
+            inflow_Q10 = {}
+            inflow_Q50 = {}
+            for discharge_def in self.config["inflow"]:
+                if "hydro3-file" in discharge_def:
+                    discharge_data = pd.read_csv(discharge_def["hydro3-file"], sep=",", parse_dates=["Date (TU)"])
+                    t = discharge_data["Date (TU)"].dt.tz_convert(None).to_numpy()
+                    q = discharge_data["Valeur (en m³/s)"].values
+                    Q10 = np.percentile(q, 10)
+                    Q50 = np.percentile(q, 50)
+                    inflow_Q10[discharge_def["segment-index"]] = Q10
+                    inflow_Q50[discharge_def["segment-index"]] = Q50
+                else:
+                    inflow_Q10[discharge_def["segment-index"]] = np.nan
+                    inflow_Q50[discharge_def["segment-index"]] = discharge_def["Q50"]
+        
 
         # Initialize sections and segments parameters dict
         segs_idx = sorted(list(network_gdf["seg_idx"].unique()))
@@ -155,12 +181,13 @@ class MeshProcessor:
             reaches_selected = reaches_selected.sort_values(by="dist_out")
             self._logger.info("- Process segment: %i [%i-%i]" % (seg_idx, reaches_selected["reach_id"].values[-1], reaches_selected["reach_id"].values[0]))
 
-            # Retrieve Q10 and Q50
-            Q10 = inflow_Q10[seg_idx]
-            Q50 = inflow_Q50[seg_idx]
-            if np.isfinite(Q10):
-                self._logger.info("  - Q10: %.3f m3/s" % Q10)
-            self._logger.info("  - Q50: %.3f m3/s" % Q50)
+            if bathy_method == "manning":
+                # Retrieve Q10 and Q50
+                Q10 = inflow_Q10[seg_idx]
+                Q50 = inflow_Q50[seg_idx]
+                if np.isfinite(Q10):
+                    self._logger.info("  - Q10: %.3f m3/s" % Q10)
+                self._logger.info("  - Q50: %.3f m3/s" % Q50)
 
             # Get list of reaches of current segment
             reaches_list = list(reaches_selected["reach_id"].values)
@@ -181,6 +208,7 @@ class MeshProcessor:
             # Get all nodes in extended reaches list
             nodes_selected_filtering = nodes_gdf[nodes_gdf["reach_id"].isin(reaches_list_extended)]
             nodes_selected = nodes_gdf[nodes_gdf["reach_id"].isin(reaches_list)]
+            
 
             # Sort nodes by increasing dist_out (recompute dist_out if requested)
             if recompute_nodes_dist_out:
@@ -195,30 +223,35 @@ class MeshProcessor:
             nodes_selected_merge["left_index"] = nodes_selected_filtering.index
             # nodes_selected_merge.set_index("left_index", inplace=True)
             nodes_selected_merge = nodes_selected_merge.set_index("left_index")
-
+            print(nodes_selected_merge.columns, nodes_selected_merge)
+            nodes_selected_merge = nodes_selected_merge.loc[:, ["key", "dist_out", "p_wse", "p_width", "wse", "width"]]
+            print(nodes_selected_merge)
+            print(nodes_selected_merge.index.size, nodes_selected_merge.dropna().index.size)
 
             # Compute curvilinear abscissae for filtering
-            xr_filt = nodes_selected_merge["dist_out"].values
+            nodes_selected_median = nodes_selected_merge.dropna().groupby(by="key").median()
+            print("nodes_selected_median=", nodes_selected_median)
+            xr_filt = nodes_selected_median["dist_out"].values
             xr = nodes_selected["dist_out"].values
             dxi = 50.0
             N = int(np.floor((xr_filt[-1] - xr_filt[0]) / dxi))
             xi = np.linspace(xr_filt[0], xr_filt[0]+N*dxi, N+1, endpoint=True)
 
             # Retrieve quantiles of wse and width and prior values to replace missing values in profiles
-            wse_10 = nodes_selected_merge["wse_10"].values
-            wse_50 = nodes_selected_merge["wse_50"].values
-            wse_90 = nodes_selected_merge["wse_90"].values
-            p_wse = nodes_selected_merge["p_wse"].values
-            width_10 = nodes_selected_merge["width_10"].values
-            width_50 = nodes_selected_merge["width_50"].values
-            width_90 = nodes_selected_merge["width_90"].values
-            p_width = nodes_selected_merge["p_width"].values
+            # wse_10 = nodes_selected_merge["wse_10"].values
+            wse_50 = nodes_selected_median["wse"].values
+            # wse_90 = nodes_selected_merge["wse_90"].values
+            p_wse = nodes_selected_median["p_wse"].values
+            # width_10 = nodes_selected_merge["width_10"].values
+            width_50 = nodes_selected_median["width"].values
+            # width_90 = nodes_selected_merge["width_90"].values
+            p_width = nodes_selected_median["p_width"].values
 
-            # Filte WSE longitudinal profile
+            # Filter WSE longitudinal profile
             wse = wse_50
             if np.sum(np.isfinite(wse)) < 5:
                 wse = p_wse
-            wsei = np.interp(xi, xr_filt[np.isfinite(wse)], wse[np.isfinite(wse)])
+            wsei = np.interp(xi, xr_filt[np.isfinite(wse_50)], wse_50[np.isfinite(wse_50)])
             plot_steps = False
             if hydraulic_filtering is not None:
                 wseifilt = hydraulic_filtering(xi, wsei, 3, plot_steps=plot_steps)
@@ -257,7 +290,13 @@ class MeshProcessor:
             # => b = H - (Q/K * W**(2/3) / (S**0.5))**(3/5) / w
             reg = sps.linregress(xr, wsefilt)
             # h = (Q10 / 30.0 * width**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width
-            h = (Q50 / 30.0 * width_filtered**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width_filtered
+            if bathy_method == "constant-depth":
+                h = bathy_depth
+            elif bathy_method == "manning":
+                h = (Q50 / 30.0 * width_filtered**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width_filtered
+            else:
+                raise RuntimeError("Wrong bathy estimation method: %s" % bathy_method)
+
             bathy = wsefilt - h
             self._logger.info("  - h: [%.3f - %.3f] m" % (np.min(h), np.max(h)))
 
