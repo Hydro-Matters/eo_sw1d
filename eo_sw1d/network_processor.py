@@ -66,6 +66,47 @@ class NetworkProcessor:
 
         self._logger.info("Compute segments:")
 
+        # Check and correct SWORD (or extractions of SWORD)
+        for index in merged_gdf.index:
+            # self._logger.info("CORRECTIF: reach_id=%s" % merged_gdf.loc[index, "reach_id"])
+            rch_id_dn = merged_gdf.loc[index, "rch_id_dn"]
+            actual_rch_id_dn = []
+            if rch_id_dn is not None:
+                if isinstance(rch_id_dn, str):
+                    rch_id_dn = list(map(int, rch_id_dn.split(" ")))
+                elif np.isnan(rch_id_dn):
+                    rch_id_dn = []
+                else:
+                    rch_id_dn = [int(rch_id_dn)]
+
+                for i in range(0, len(rch_id_dn)):
+                    reach_rows = merged_gdf[merged_gdf["reach_id"] == rch_id_dn[i]]
+                    if reach_rows.index.size == 0:
+                        continue
+                    actual_rch_id_dn.append(rch_id_dn)
+                merged_gdf.loc[index, "n_rch_dn"] = len(actual_rch_id_dn)
+                if len(actual_rch_id_dn) == 0:
+                    merged_gdf.loc[index, "rch_id_dn"] = None
+                else:
+                    merged_gdf.loc[index, "rch_id_dn"] = " ".join(map(str, actual_rch_id_dn))
+            rch_id_up = merged_gdf.loc[index, "rch_id_up"]
+            actual_rch_id_up = []
+            if rch_id_up is not None:
+                if isinstance(rch_id_up, str):
+                    rch_id_up = list(map(int, rch_id_up.split(" ")))
+                elif np.isnan(rch_id_up):
+                    rch_id_up = []
+                else:
+                    rch_id_up = [int(rch_id_up)]
+
+                for i in range(0, len(rch_id_up)):
+                    reach_rows = merged_gdf[merged_gdf["reach_id"] == rch_id_up[i]]
+                    if reach_rows.index.size == 0:
+                        continue
+                    actual_rch_id_up.append(rch_id_up)
+                merged_gdf.loc[index, "n_rch_up"] = 0
+                merged_gdf.loc[index, "rch_id_up"] = ",".join(map(str, actual_rch_id_up))
+
         # Retrieve downstream reaches
         if "downtream-reaches" in self.config:
             downtream_reaches = self.config["downtream-reaches"]
@@ -112,6 +153,8 @@ class NetworkProcessor:
 
                     for i in range(0, len(rch_id_dn)):
                         reach_rows = merged_gdf[merged_gdf["reach_id"] == rch_id_dn[i]]
+                        if reach_rows.index.size == 0:
+                            continue
                         dn_dist_out_max = max(dn_dist_out_max, merged_gdf.loc[reach_rows.index[0], "c_dist_out"])
 
                     merged_gdf.loc[cur_row_index, "c_dist_out"] = dn_dist_out_max + merged_gdf.loc[cur_row_index, "reach_len"]
@@ -132,7 +175,8 @@ class NetworkProcessor:
                         reach_id = int(reach_id)
                         reach_rows = merged_gdf[merged_gdf["reach_id"] == reach_id]
                         if reach_rows.index.size == 0:
-                            raise RuntimeError("reach_id not found: %i" % reach_id)
+                            continue
+                            # raise RuntimeError("reach_id not found: %i" % reach_id)
                         elif reach_rows.index.size > 1:
                             print(reach_rows)
                             raise RuntimeError("Found multiple rows for reach_id: %i" % reach_id)
