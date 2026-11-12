@@ -343,3 +343,64 @@ class MultiSourcesProcessor:
         self._logger.info("[ END ] MultiSourcesProcessor::process") 
 
         return self._final_summary
+
+    def plot_section(self, key=None, index=None):
+        pass
+        #TODO
+
+
+
+        # if key is None:
+        #     if index is None:
+        #         raise ValueError("Either 'key' or 'index' must be provided")
+        #     keys = list(set(self._alti_processor.merged_data["key"]))
+        #     key = keys[index]
+
+        # wse_data = self._alti_processor.get_data(key)
+        # if self._width_processor is None:
+        #     width_data = wse_data
+        # else:
+        #     width_data = self._width_processor.get_data(key)
+
+
+
+        # # Make plot
+        # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9,4))
+        # ax1.plot(t_width, wse2, "b-")
+        # ax1.plot(t_width, wse2, "b.")
+        # ax1.set_xlabel("date")
+        # ax1.tick_params(axis='x', rotation=45)
+        # ax1.set_ylabel("wse (m)")
+        # ax1.yaxis.label.set_color('b')
+        # ax1.tick_params(axis='y', colors='b')
+        # twinx = ax1.twinx()
+        # twinx.plot(t_width, width, "g-")
+        # twinx.plot(t_width, width, "g.")
+        # twinx.set_ylabel("W (m)")
+        # twinx.yaxis.label.set_color('g')
+        # twinx.tick_params(axis='y', colors='g')
+        # ax2.set_xlabel("W (m)")
+        # ax2.set_ylabel("wse (m)")
+
+        # # Add percentiles to plot
+        # wse_percentiles = np.array([np.percentile(wse, pct) for pct in range(10, 100, 10)])
+        # wse2_percentiles = np.array([np.percentile(wse2, pct) for pct in range(10, 100, 10)])
+        # width_percentiles = np.array([np.percentile(width, pct) for pct in range(10, 100, 10)])
+        # # ax2.plot(-0.5 * width_percentiles, wse_percentiles, "b-")
+        # # ax2.plot(0.5 * width_percentiles, wse_percentiles, "b-")
+        # ax2.plot(-0.5 * width_percentiles, wse2_percentiles, "g-")
+        # ax2.plot(0.5 * width_percentiles, wse2_percentiles, "g-")
+
+        # # Add regression profiles
+        # ax2.plot(-0.5 * width, wse2, "r.", alpha=0.5)
+        # ax2.plot(0.5 * width, wse2, "r.", alpha=0.5)
+        # ax2.plot(-0.5 * width_reg, wse_reg, "b--")
+        # ax2.plot(0.5 * width_reg, wse_reg, "b--")
+
+        # # Finalize and save plot
+        # fig_title = "node_id: %i" % key
+        # fig.suptitle(fig_title)
+        # plt.tight_layout()
+        # plot_file = "%s_%i.png" % (self.config["output"]["section-plots-prefix"], key)
+        # fig.savefig(plot_file)
+        # plt.close(fig)                

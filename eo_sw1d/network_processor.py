@@ -68,7 +68,7 @@ class NetworkProcessor:
 
         # Check and correct SWORD (or extractions of SWORD)
         for index in merged_gdf.index:
-            # self._logger.info("CORRECTIF: reach_id=%s" % merged_gdf.loc[index, "reach_id"])
+            self._logger.debug("CHECK CONN: reach_id=%s" % merged_gdf.loc[index, "reach_id"])
             rch_id_dn = merged_gdf.loc[index, "rch_id_dn"]
             actual_rch_id_dn = []
             if rch_id_dn is not None:
@@ -83,14 +83,16 @@ class NetworkProcessor:
                     reach_rows = merged_gdf[merged_gdf["reach_id"] == rch_id_dn[i]]
                     if reach_rows.index.size == 0:
                         continue
-                    actual_rch_id_dn.append(rch_id_dn)
+                    actual_rch_id_dn.append(rch_id_dn[i])
                 merged_gdf.loc[index, "n_rch_dn"] = len(actual_rch_id_dn)
                 if len(actual_rch_id_dn) == 0:
                     merged_gdf.loc[index, "rch_id_dn"] = None
                 else:
                     merged_gdf.loc[index, "rch_id_dn"] = " ".join(map(str, actual_rch_id_dn))
+            self._logger.debug("=>: n_rch_dn=%i" % len(actual_rch_id_dn))
             rch_id_up = merged_gdf.loc[index, "rch_id_up"]
             actual_rch_id_up = []
+            self._logger.debug("=>: rch_id_up[0]=%s" % str(merged_gdf.loc[index, "rch_id_up"]))
             if rch_id_up is not None:
                 if isinstance(rch_id_up, str):
                     rch_id_up = list(map(int, rch_id_up.split(" ")))
@@ -103,9 +105,14 @@ class NetworkProcessor:
                     reach_rows = merged_gdf[merged_gdf["reach_id"] == rch_id_up[i]]
                     if reach_rows.index.size == 0:
                         continue
-                    actual_rch_id_up.append(rch_id_up)
-                merged_gdf.loc[index, "n_rch_up"] = 0
-                merged_gdf.loc[index, "rch_id_up"] = ",".join(map(str, actual_rch_id_up))
+                    actual_rch_id_up.append(rch_id_up[i])
+                merged_gdf.loc[index, "n_rch_up"] = len(actual_rch_id_up)
+                if len(actual_rch_id_up) == 0:
+                    merged_gdf.loc[index, "rch_id_up"] = None
+                else:
+                    merged_gdf.loc[index, "rch_id_up"] = " ".join(map(str, actual_rch_id_up))
+            self._logger.debug("=>: n_rch_up=%i" % len(actual_rch_id_up))
+            self._logger.debug("=>: rch_id_up=%s" % str(merged_gdf.loc[index, "rch_id_up"]))
 
         # Retrieve downstream reaches
         if "downtream-reaches" in self.config:
@@ -196,7 +203,7 @@ class NetworkProcessor:
                         stack.append(cur_row_index)
                         break
 
-        self._logger.info("- Number of segments: %i" % segment_index)
+        self._logger.info("- Number of segments: %i" % (segment_index+1))
 
         # Remove not assigned reach
         merged_gdf = merged_gdf[merged_gdf["seg_idx"] != -9]
@@ -254,3 +261,23 @@ class NetworkProcessor:
 
         self._logger.info("[ END ] NetworkProcessor::process") 
 
+    def compute_segments(self):
+        merged_gdf = self._merged_gdf
+        segments_indices = merged_gdf["seg_idx"].unique()
+        segments_data = {"seg_idx": [],
+                            "geometry": []}
+
+        for seg_idx in segments_indices:
+
+            segment_gdf = merged_gdf[merged_gdf["seg_idx"] == seg_idx]
+            segment_gdf_sorted = segment_gdf.sort_values(by="dist_out", ascending=False)
+            coords = []
+            for index in segment_gdf_sorted.index:
+                reach_coords = segment_gdf_sorted.loc[index, "geometry"].coords
+                reach_id = segment_gdf_sorted.loc[index, "reach_id"]
+                coords += reach_coords[::-1][1:]
+
+            segments_data["seg_idx"].append(seg_idx)
+            segments_data["geometry"].append(LineString(coords))
+
+        self._segments_gdf = gpd.GeoDataFrame(data={"seg_idx": segments_data["seg_idx"]}, geometry=segments_data["geometry"], crs=4326)

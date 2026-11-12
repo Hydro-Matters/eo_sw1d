@@ -237,11 +237,9 @@ class AltiMergeProcessor:
                         for riversp_zipfile in riversp_zipfiles:
                             long_id = os.path.splitext(os.path.basename(riversp_zipfile))[0]
                             if not os.path.isfile(os.path.join(source["source-dir"], "%s.shp" % long_id)):
-                                self._logger.info("- Extracting zip for %s" % long_id)
+                                self._logger.debug("- Extracting zip for %s" % long_id)
                                 with zipfile.ZipFile(riversp_zipfile, 'r') as zp:
                                     zp.extractall(source["source-dir"])
-                                self._logger.info("DBG: %s" % riversp_zipfile)
-                                self._logger.info("     %s" % os.path.join(source["source-dir"], "%s.shp" % long_id))
                                 if not os.path.isfile(os.path.join(source["source-dir"], "%s.shp" % long_id)):
                                     raise RuntimeError("shapefile not found after extracting the zip archive")
                                 riversp_files.append(os.path.join(source["source-dir"], "%s.shp" % long_id))

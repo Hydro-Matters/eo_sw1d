@@ -124,12 +124,15 @@ class MeshProcessor:
             self._logger.info("Load profiles file")
             self._logger.info("- file: %s" % self.config["sources"]["profiles-file"])
             profiles_gdf = gpd.read_file(self.config["sources"]["profiles-file"])
+            # profiles_gdf["wse"] = profiles_gdf["wse"].astype(float)
             profiles_gdf["key"] = profiles_gdf["key"].astype(np.int64)
-            print("TEST0:", profiles_gdf.key.dtype)
+            for variable in ["x", "y", "wse", "width"]:
+                nonvalid = profiles_gdf[profiles_gdf[variable] == ""]
+                profiles_gdf.loc[nonvalid.index, [variable]] = np.nan
+                profiles_gdf[variable] = profiles_gdf[variable].astype(float)
+            # profiles_gdf.loc[nonvalid.index, ["wse"]] = np.nan
         elif "profiles" in self.config["sources"]:
             profiles_gdf = self.config["sources"]["profiles"]._merged_gdf
-            print("TEST:", profiles_gdf.key.dtype)
-            print("TEST:", nodes_gdf.node_id.dtype)
         else:
             raise ValueError("Either 'network' or 'network-file' must be set in sources")
         
@@ -218,19 +221,18 @@ class MeshProcessor:
             nodes_selected = nodes_selected.sort_values(by="dist_out", ascending=True)
 
             # Merge nodes and profile data (from MultiSourceProcessor output)
-            nodes_selected_merge = pd.merge(nodes_selected_filtering, profiles_gdf, how="left", left_on="node_id", right_on="key", suffixes=["_left", "_right"])
+            # for column in profiles_gdf.columns:
+            #     print("%s: %s (%s)" % (column, profiles_gdf[column].dtype, str(profiles_gdf[column].values[0:10])))
+            profiles_gdf_median = profiles_gdf.dropna().groupby(by="key", as_index=False).median()
+            nodes_selected_merge = pd.merge(nodes_selected_filtering, profiles_gdf_median, how="left", left_on="node_id", right_on="key", suffixes=["_left", "_right"])
             nodes_selected_merge = nodes_selected_merge.sort_values(by="dist_out", ascending=True)
             nodes_selected_merge["left_index"] = nodes_selected_filtering.index
             # nodes_selected_merge.set_index("left_index", inplace=True)
             nodes_selected_merge = nodes_selected_merge.set_index("left_index")
-            print(nodes_selected_merge.columns, nodes_selected_merge)
             nodes_selected_merge = nodes_selected_merge.loc[:, ["key", "dist_out", "p_wse", "p_width", "wse", "width"]]
-            print(nodes_selected_merge)
-            print(nodes_selected_merge.index.size, nodes_selected_merge.dropna().index.size)
 
             # Compute curvilinear abscissae for filtering
             nodes_selected_median = nodes_selected_merge.dropna().groupby(by="key").median()
-            print("nodes_selected_median=", nodes_selected_median)
             xr_filt = nodes_selected_median["dist_out"].values
             xr = nodes_selected["dist_out"].values
             dxi = 50.0
@@ -291,7 +293,7 @@ class MeshProcessor:
             reg = sps.linregress(xr, wsefilt)
             # h = (Q10 / 30.0 * width**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width
             if bathy_method == "constant-depth":
-                h = bathy_depth
+                h = np.ones(wsefilt.size) * bathy_depth
             elif bathy_method == "manning":
                 h = (Q50 / 30.0 * width_filtered**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width_filtered
             else:
@@ -349,7 +351,6 @@ class MeshProcessor:
             # Make some plots
             if "plot-dir" in self.config["output"]:
                 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
-                ax1.plot(xr_filt * 0.001, wse_10, "b-+", label="wse Q10 (raw)")
                 ax1.plot(xr_filt * 0.001, wse, "g--", label="wse Q10 (filled with p_wse)")
                 ax1.plot(xr * 0.001, wsefilt, "r--", label="wse Q10 (filtered)")
                 ax1.plot(xr * 0.001, bathy, "k-", label="bathy")
@@ -358,10 +359,10 @@ class MeshProcessor:
                 ax1.axvline(xr[-1] * 0.001, ls="--", color="k")
                 ax1.set_ylabel("wse (m)")
                 ax1.legend()
-                width_10_corrected = width_10.copy()
-                width_10_corrected[width_10_corrected < -99] = np.nan
-                ax2.plot(xr_filt * 0.001, width_10_corrected, label="with Q10 (raw)")
-                ax2.plot(xr_filt * 0.001, width, label="width Q10 (filled with p_width)")
+                width_corrected = width.copy()
+                width_corrected[width_corrected < -99] = np.nan
+                ax2.plot(xr_filt * 0.001, width_corrected, label="with Q50 (raw)")
+                ax2.plot(xr_filt * 0.001, width, label="width Q50 (corrected)")
                 ax2.set_ylabel("width (m)")
                 ax3.plot(xr * 0.001, h, "r-")
                 ax2.axvline(xr[0] * 0.001, ls="--", color="k")
