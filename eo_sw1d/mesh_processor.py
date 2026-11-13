@@ -145,7 +145,7 @@ class MeshProcessor:
 
         if bathy_method == "constant-depth":
             bathy_depth = bathy_estimation["constant-depth"]
-        elif bathy_method == "manning":
+        elif bathy_method == "manning-equation":
             # Get inflow data
             inflow_Q10 = {}
             inflow_Q50 = {}
@@ -184,7 +184,7 @@ class MeshProcessor:
             reaches_selected = reaches_selected.sort_values(by="dist_out")
             self._logger.info("- Process segment: %i [%i-%i]" % (seg_idx, reaches_selected["reach_id"].values[-1], reaches_selected["reach_id"].values[0]))
 
-            if bathy_method == "manning":
+            if bathy_method == "manning-equation":
                 # Retrieve Q10 and Q50
                 Q10 = inflow_Q10[seg_idx]
                 Q50 = inflow_Q50[seg_idx]
@@ -294,7 +294,8 @@ class MeshProcessor:
             # h = (Q10 / 30.0 * width**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width
             if bathy_method == "constant-depth":
                 h = np.ones(wsefilt.size) * bathy_depth
-            elif bathy_method == "manning":
+            elif bathy_method == "manning-equation":
+                manning = self.config["bathy-estimation"]["manning"]
                 h = (Q50 / 30.0 * width_filtered**(2./3.) / np.sqrt(reg.slope))**(3./5.) / width_filtered
             else:
                 raise RuntimeError("Wrong bathy estimation method: %s" % bathy_method)

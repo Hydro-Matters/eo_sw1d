@@ -344,63 +344,153 @@ class MultiSourcesProcessor:
 
         return self._final_summary
 
-    def plot_section(self, key=None, index=None):
-        pass
-        #TODO
+    def plot_section(self, key=None, index=None, min_obs_count: int=10):
 
+        if key is None:
+            if index is None:
+                raise ValueError("Either 'key' or 'index' must be provided")
+            keys = list(set(self._alti_processor.merged_data["key"]))
+            key = keys[index]
 
+        wse_data = self._alti_processor.get_data(key)
+        if self._width_processor is None:
+            width_data = wse_data
+        else:
+            width_data = self._width_processor.get_data(key)
 
-        # if key is None:
-        #     if index is None:
-        #         raise ValueError("Either 'key' or 'index' must be provided")
-        #     keys = list(set(self._alti_processor.merged_data["key"]))
-        #     key = keys[index]
+        # Retrieve wse timeseries and priority
+        t_wse = wse_data["t"].values
+        wse_values = wse_data["wse"].values
+        wse_priority = wse_data["priority"].values
+        wse_sources = wse_data["source"].values
+        t_wse = t_wse[np.isfinite(wse_values)]
+        wse_priority = wse_priority[np.isfinite(wse_values)]
+        wse_sources = wse_sources[np.isfinite(wse_values)]
+        wse_values = wse_values[np.isfinite(wse_values)]
 
-        # wse_data = self._alti_processor.get_data(key)
-        # if self._width_processor is None:
-        #     width_data = wse_data
-        # else:
-        #     width_data = self._width_processor.get_data(key)
+        # Restrict to minimum priority for wse
+        priority_min = np.min(wse_priority)
+        wse_values = wse_values[wse_priority == priority_min]
+        wse_sources = wse_sources[wse_priority == priority_min]
+        t_wse = t_wse[wse_priority == priority_min]
 
+        # Compute percentiles of wse
+        if wse_values.size < min_obs_count:
+            wse_10 = np.nan
+            wse_50 = np.nan
+            wse_90 = np.nan
+        else:
+            wse_10 = np.percentile(wse_values, 10)
+            wse_50 = np.percentile(wse_values, 50)
+            wse_90 = np.percentile(wse_values, 90)
+        wse_count = wse_values.size
 
+        # Retrieve width timeseries and priority
+        if "width" in wse_data:
+            if width_data is not None:
+                t_width = np.concatenate((wse_data["t"].values, width_data["t"].values))
+                width_values = np.concatenate((wse_data["width"].values, width_data["width"].values))
+                width_sources = np.concatenate((wse_data["source"].values * (-1), width_data["source"].values))
+                width_priority = np.concatenate((wse_data["priority"].values, width_data["priority"].values))
+            else:
+                t_width = wse_data["t"].values
+                width_values = wse_data["width"].values
+                width_sources = wse_data["source"].values * (-1)
+                width_priority = wse_data["priority"].values
+        else:
+            t_width = width_data["t"].values
+            width_values = width_data["width"].values
+            width_sources = width_data["source"].values
+            width_priority = width_data["priority"].values
+        t_width = t_width[np.isfinite(width_values)]
+        width_priority = width_priority[np.isfinite(width_values)]
+        width_sources = width_sources[np.isfinite(width_values)]
+        width_values = width_values[np.isfinite(width_values)]
 
-        # # Make plot
-        # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9,4))
-        # ax1.plot(t_width, wse2, "b-")
-        # ax1.plot(t_width, wse2, "b.")
-        # ax1.set_xlabel("date")
-        # ax1.tick_params(axis='x', rotation=45)
-        # ax1.set_ylabel("wse (m)")
-        # ax1.yaxis.label.set_color('b')
-        # ax1.tick_params(axis='y', colors='b')
-        # twinx = ax1.twinx()
-        # twinx.plot(t_width, width, "g-")
-        # twinx.plot(t_width, width, "g.")
-        # twinx.set_ylabel("W (m)")
-        # twinx.yaxis.label.set_color('g')
-        # twinx.tick_params(axis='y', colors='g')
-        # ax2.set_xlabel("W (m)")
-        # ax2.set_ylabel("wse (m)")
+        # Restrict to minimum priority for width
+        if width_priority.size > 0:
+            priority_min = np.min(width_priority)
+            width_values = width_values[width_priority == priority_min]
+            width_sources = width_sources[width_priority == priority_min]
+            t_width = t_width[width_priority == priority_min]
 
-        # # Add percentiles to plot
-        # wse_percentiles = np.array([np.percentile(wse, pct) for pct in range(10, 100, 10)])
-        # wse2_percentiles = np.array([np.percentile(wse2, pct) for pct in range(10, 100, 10)])
-        # width_percentiles = np.array([np.percentile(width, pct) for pct in range(10, 100, 10)])
-        # # ax2.plot(-0.5 * width_percentiles, wse_percentiles, "b-")
-        # # ax2.plot(0.5 * width_percentiles, wse_percentiles, "b-")
-        # ax2.plot(-0.5 * width_percentiles, wse2_percentiles, "g-")
-        # ax2.plot(0.5 * width_percentiles, wse2_percentiles, "g-")
+        # Compute percentiles of width
+        if width_values.size < min_obs_count:
+            width_10 = np.nan
+            width_50 = np.nan
+            width_90 = np.nan
+        else:
+            width_values = np.maximum(width_values, 30.0)
+            width_10 = np.percentile(width_values, 10)
+            width_50 = np.percentile(width_values, 10)
+            width_90 = np.percentile(width_values, 90)
+        width_count = width_values.size
 
-        # # Add regression profiles
-        # ax2.plot(-0.5 * width, wse2, "r.", alpha=0.5)
-        # ax2.plot(0.5 * width, wse2, "r.", alpha=0.5)
-        # ax2.plot(-0.5 * width_reg, wse_reg, "b--")
-        # ax2.plot(0.5 * width_reg, wse_reg, "b--")
+        # Sort wse in time
+        isort = np.argsort(t_wse)
+        t_wse = t_wse[isort]
+        wse = wse_values[isort]
 
-        # # Finalize and save plot
-        # fig_title = "node_id: %i" % key
-        # fig.suptitle(fig_title)
-        # plt.tight_layout()
-        # plot_file = "%s_%i.png" % (self.config["output"]["section-plots-prefix"], key)
-        # fig.savefig(plot_file)
-        # plt.close(fig)                
+        # Sort width in time
+        isort = np.argsort(t_width)
+        t_width = t_width[isort]
+        width = width_values[isort]
+
+        # Interpolate width on wse times and vice-versa
+        dt_wse = (t_wse - np.datetime64("1970-01-01")) / np.timedelta64(1, "s")
+        dt_width = (t_width - np.datetime64("1970-01-01")) / np.timedelta64(1, "s")
+        wse2 = np.interp(dt_width, dt_wse, wse)
+        wse_reg = wse2[np.argsort(wse2)]
+        width_reg = width[np.argsort(wse2)]
+        if "section-method" in self.config:
+            section_method = self.config["section-method"]
+        else:
+            section_method = "percentiles"
+        if section_method == "percentiles":
+            wse_percentiles = np.array([np.percentile(wse_reg, pct) for pct in range(10, 100, 10)])
+            width_percentiles = np.array([np.percentile(width_reg, pct) for pct in range(10, 100, 10)])
+            wse_reg = wse_percentiles
+            width_reg = width_percentiles
+        elif section_method == "powerlaw":
+            width_reg = powerlaw_fit(wse_reg, width_reg)
+        else:
+            raise ValueError("Wrong section method: %s" % self.config["section-method"])
+
+        # Make plot
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9,4))
+        ax1.plot(t_width, wse2, "b-")
+        ax1.plot(t_width, wse2, "b.")
+        ax1.set_xlabel("date")
+        ax1.tick_params(axis='x', rotation=45)
+        ax1.set_ylabel("wse (m)")
+        ax1.yaxis.label.set_color('b')
+        ax1.tick_params(axis='y', colors='b')
+        twinx = ax1.twinx()
+        twinx.plot(t_width, width, "g-")
+        twinx.plot(t_width, width, "g.")
+        twinx.set_ylabel("W (m)")
+        twinx.yaxis.label.set_color('g')
+        twinx.tick_params(axis='y', colors='g')
+        ax2.set_xlabel("W (m)")
+        ax2.set_ylabel("wse (m)")
+
+        # Add percentiles to plot
+        wse_percentiles = np.array([np.percentile(wse, pct) for pct in range(10, 100, 10)])
+        wse2_percentiles = np.array([np.percentile(wse2, pct) for pct in range(10, 100, 10)])
+        width_percentiles = np.array([np.percentile(width, pct) for pct in range(10, 100, 10)])
+        # ax2.plot(-0.5 * width_percentiles, wse_percentiles, "b-")
+        # ax2.plot(0.5 * width_percentiles, wse_percentiles, "b-")
+        ax2.plot(-0.5 * width_percentiles, wse2_percentiles, "g-")
+        ax2.plot(0.5 * width_percentiles, wse2_percentiles, "g-")
+
+        # Add regression profiles
+        ax2.plot(-0.5 * width, wse2, "r.", alpha=0.5)
+        ax2.plot(0.5 * width, wse2, "r.", alpha=0.5)
+        ax2.plot(-0.5 * width_reg, wse_reg, "b--")
+        ax2.plot(0.5 * width_reg, wse_reg, "b--")
+
+        # Finalize and save plot
+        fig_title = "node_id: %i" % key
+        fig.suptitle(fig_title)
+        plt.tight_layout()
+        plt.show()
