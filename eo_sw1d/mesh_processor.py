@@ -314,37 +314,53 @@ class MeshProcessor:
             nodes_gdf.loc[nodes_selected.index, "bathy"] = bathy
             nodes_gdf.loc[nodes_selected.index, "bathy_filtered"] = bathy_filtered
 
+            # # Compute section vertical profile
+            # for index in nodes_selected.index[::-1]:
+            #     wse_90_cs = nodes_gdf.loc[index, "wse90filt"]
+            #     if wse_90_cs < nodes_gdf.loc[index, "wsefilt"]:
+            #         wse_90_cs = np.nan
+            #     wse_90_cs = np.nan
+            #     width_90_cs = nodes_gdf.loc[index, "width90filt"]
+            #     if np.isfinite(wse_90_cs) and np.isfinite(width_90_cs) and width_90_cs > -999.0 and width_90_cs > nodes_gdf.loc[index, "widthfilt"]:
+            #         cs_list.append({
+            #             "dist": nodes_gdf.loc[index, "dist_out"],
+            #             "x": nodes_gdf.loc[index, "geometry"].x,
+            #             "y": nodes_gdf.loc[index, "geometry"].y,
+            #             "bathy": nodes_gdf.loc[index, "bathy_filtered"],
+            #             "wse": [0.5 * (nodes_gdf.loc[index, "wsefilt"] + wse_90_cs)],
+            #             "width": [0.5 * (nodes_gdf.loc[index, "widthfilt"] + width_90_cs)],
+            #             "node_id": nodes_gdf.loc[index, "node_id"],
+            #             "seg_idx": seg_idx,
+            #             "seg_index": iseg
+            #         })
+            #     else:
+            #         cs_list.append({
+            #             "dist": nodes_gdf.loc[index, "dist_out"],
+            #             "x": nodes_gdf.loc[index, "geometry"].x,
+            #             "y": nodes_gdf.loc[index, "geometry"].y,
+            #             "bathy": nodes_gdf.loc[index, "bathy_filtered"],
+            #             "wse": [nodes_gdf.loc[index, "wsefilt"]],
+            #             "width": [nodes_gdf.loc[index, "widthfilt"]],
+            #             "node_id": nodes_gdf.loc[index, "node_id"],
+            #             "seg_idx": seg_idx,
+            #             "seg_index": iseg
+            #         })
+
             # Compute section vertical profile
             for index in nodes_selected.index[::-1]:
-                wse_90_cs = nodes_gdf.loc[index, "wse90filt"]
-                if wse_90_cs < nodes_gdf.loc[index, "wsefilt"]:
-                    wse_90_cs = np.nan
-                wse_90_cs = np.nan
-                width_90_cs = nodes_gdf.loc[index, "width90filt"]
-                if np.isfinite(wse_90_cs) and np.isfinite(width_90_cs) and width_90_cs > -999.0 and width_90_cs > nodes_gdf.loc[index, "widthfilt"]:
-                    cs_list.append({
-                        "dist": nodes_gdf.loc[index, "dist_out"],
-                        "x": nodes_gdf.loc[index, "geometry"].x,
-                        "y": nodes_gdf.loc[index, "geometry"].y,
-                        "bathy": nodes_gdf.loc[index, "bathy_filtered"],
-                        "wse": [0.5 * (nodes_gdf.loc[index, "wsefilt"] + wse_90_cs)],
-                        "width": [0.5 * (nodes_gdf.loc[index, "widthfilt"] + width_90_cs)],
-                        "node_id": nodes_gdf.loc[index, "node_id"],
-                        "seg_idx": seg_idx,
-                        "seg_index": iseg
-                    })
-                else:
-                    cs_list.append({
-                        "dist": nodes_gdf.loc[index, "dist_out"],
-                        "x": nodes_gdf.loc[index, "geometry"].x,
-                        "y": nodes_gdf.loc[index, "geometry"].y,
-                        "bathy": nodes_gdf.loc[index, "bathy_filtered"],
-                        "wse": [nodes_gdf.loc[index, "wsefilt"]],
-                        "width": [nodes_gdf.loc[index, "widthfilt"]],
-                        "node_id": nodes_gdf.loc[index, "node_id"],
-                        "seg_idx": seg_idx,
-                        "seg_index": iseg
-                    })
+                key = nodes_gdf.loc[index, "node_id"]
+                profiles_subset = profiles_gdf[profiles_gdf["key"] == key]
+                cs_list.append({
+                    "dist": nodes_gdf.loc[index, "dist_out"],
+                    "x": nodes_gdf.loc[index, "geometry"].x,
+                    "y": nodes_gdf.loc[index, "geometry"].y,
+                    "bathy": nodes_gdf.loc[index, "bathy_filtered"],
+                    "wse": profiles_subset["wse"].values.tolist(),
+                    "width": profiles_subset["width"].values.tolist(),
+                    "node_id": nodes_gdf.loc[index, "node_id"],
+                    "seg_idx": seg_idx,
+                    "seg_index": iseg
+                })
 
             # Set number of sections in segment
             segs_dict[seg_idx]["ncs"] = len(cs_list) - segs_dict[seg_idx]["first_cs"]
@@ -445,7 +461,43 @@ class MeshProcessor:
 
         # TODO Bathy correction at junctions
 
-        self._logger.info("[ END ] MeshProcessor::process") 
+        self._logger.info("[ END ] MeshProcessor::process")
+
+    def plot_section(self, key=None, index=None):
+
+        if key is None:
+            if index is None:
+                raise ValueError("Either 'key' or 'index' must be provided")
+            key = self._cs_df["id"].values[index]
+
+        cs_subset = self._cs_df[self._cs_df["id"] == key]
+        print(cs_subset)
+        print(self._cs_df["id"].values)
+        bathy = cs_subset["bathy"].values[0]
+        wse_values = cs_subset["wse"].values
+        width_values = cs_subset["width"].values
+
+        fig = plt.figure(figsize=(5,4))
+        xA0rect = [-0.5 * width_values[0],
+                   -0.5 * width_values[0],
+                    0.5 * width_values[0],
+                    0.5 * width_values[0]]
+        yA0rect = [wse_values[0],
+                   bathy,
+                   bathy,
+                   wse_values[0]]
+                  
+        plt.plot(xA0rect, yA0rect, "r.", alpha=0.5)
+        plt.plot(xA0rect, yA0rect, "r-", alpha=0.5)
+        plt.plot(-0.5 * width_values, wse_values, "b-", alpha=0.5)
+        plt.plot(0.5 * width_values, wse_values, "b-", alpha=0.5)
+        plt.plot(-0.5 * width_values, wse_values, "b.")
+        plt.plot(0.5 * width_values, wse_values, "b.")
+        plt.xlabel("W (m)")
+        plt.ylabel("wse (m)")
+        plt.title(key)
+        plt.show()
+
 
     def _recompute_nodes_dist_out_(self, nodes_gdf, network_gdf, debug=False):
 
